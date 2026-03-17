@@ -212,3 +212,21 @@ async def ingest_documents(api_key: str = Depends(get_api_key)):
     embedder = OpenAIEmbedder(api_key=settings.openai_api_key, model=settings.embedding_model)
     count = await ingest_runbooks(embedder)
     return {"status": "ok", "chunks_ingested": count}
+
+
+# =============================================================================
+# USAGE - Token/cost tracking
+# =============================================================================
+
+@router.get("/usage")
+async def get_usage(api_key: str = Depends(get_api_key), from_date: str | None = None, to_date: str | None = None):
+    from src.tracking.tracker import get_usage_summary
+    summary = await get_usage_summary(from_date=from_date, to_date=to_date)
+    return {"usage": summary}
+
+
+@router.get("/usage/summary")
+async def get_usage_summary_endpoint(api_key: str = Depends(get_api_key), group_by: str = "agent_template"):
+    from src.tracking.tracker import get_usage_summary
+    summary = await get_usage_summary(group_by=group_by)
+    return {"summary": summary}
