@@ -27,6 +27,13 @@ async def activate_kill_switch() -> None:
     r = await get_redis()
     await r.set(settings.kill_switch_key, "1")
     logger.warning("KILL SWITCH ACTIVATED")
+    # Flush LLM response cache
+    keys = []
+    async for key in r.scan_iter("stourio:llm_cache:*"):
+        keys.append(key)
+    if keys:
+        await r.delete(*keys)
+        logger.info(f"Flushed {len(keys)} cached LLM responses on kill switch activation")
 
 
 async def deactivate_kill_switch() -> None:
