@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stourio Admin</title>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@400;600&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        stourio: {
+                            bg: '#f4f1e8',
+                            primary: '#1a1a1a',
+                            secondary: '#6b6b6b',
+                            accent: '#2e2e2e',
+                            border: '#d8d4c8',
+                            red: '#8b0000',
+                            green: '#2d5a27'
+                        }
+                    },
+                    fontFamily: {
+                        serif: ['Crimson Pro', 'serif'],
+                        sans: ['DM Sans', 'sans-serif']
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { background-color: #f4f1e8; color: #1a1a1a; font-family: 'DM Sans', sans-serif; }
+        h1, h2, h3, h4, h5, h6 { font-family: 'Crimson Pro', serif; }
+        .card { background: white; border: 1px solid #d8d4c8; border-radius: 4px; padding: 1.5rem; }
+        .input-field { width: 100%; border: 1px solid #d8d4c8; padding: 0.5rem; border-radius: 4px; background: white; margin-bottom: 1rem; }
+        .btn { padding: 0.5rem 1rem; border-radius: 4px; font-weight: 500; cursor: pointer; transition: all 0.2s; }
+        .btn-primary { background: #2e2e2e; color: white; border: 1px solid #2e2e2e; }
+        .btn-danger { background: #8b0000; color: white; border: 1px solid #8b0000; }
+        .btn-outline { background: transparent; color: #2e2e2e; border: 1px solid #2e2e2e; }
+        table { width: 100%; text-align: left; border-collapse: collapse; }
+        th, td { padding: 0.75rem; border-bottom: 1px solid #d8d4c8; }
+        th { font-family: 'Crimson Pro', serif; font-weight: 600; color: #6b6b6b; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        function App() {
+            const [apiKey, setApiKey] = useState(sessionStorage.getItem('stourio_key') || '');
+            const [view, setView] = useState('console'); // console, rules, audit
+            const [status, setStatus] = useState(null);
+
+            // Core API fetch wrapper
+            const api = async (endpoint, method = 'GET', body = null) => {
+                const headers = { 'X-STOURIO-KEY': apiKey };
+                if (body) headers['Content-Type'] = 'application/json';
+                const res = await fetch(endpoint, { method, headers, body: body ? JSON.stringify(body) : null });
+                if (res.status === 401 || res.status === 403) {
+                    setApiKey(''); sessionStorage.removeItem('stourio_key');
+                    alert('Invalid or missing API Key.'); throw new Error('Auth failed');
+                }
+                if (!res.ok && res.status !== 202) throw new Error(await res.text());
+                return res.json();
+            };
+
+            // Status Polling
+            useEffect(() => {
+                if (!apiKey) return;
+                const fetchStatus = () => api('/api/status').then(setStatus).catch(console.error);
+                fetchStatus();
+                const interval = setInterval(fetchStatus, 5000);
+                return () => clearInterval(interval);
+            }, [apiKey]);
+
+            const toggleKillSwitch = async () => {
+                const endpoint = status?.kill_switch ? '/api/resume' : '/api/kill';
+                await api(endpoint, 'POST');
+                api('/api/status').then(setStatus);
+            };
+
+            if (!apiKey) {
+                return (
+                    <div className="min-h-screen flex items-center justify-center">
+                        <div className="card w-96 max-w-full">
+                            <h2 className="text-2xl mb-2">Stourio Authentication</h2>
+                            <p className="text-stourio-secondary mb-4 text-sm">Enter your X-STOURIO-KEY to access the command panel.</p>
+                            <input type="password" id="keyInput" className="input-field" placeholder="API Key" />
+                            <button className="btn btn-primary w-full" onClick={() => {
+                                const val = document.getElementById('keyInput').value;
+                                setApiKey(val); sessionStorage.setItem('stourio_key', val);
+                            }}>Authenticate</button>
+                        </div>
+                    </div>
+                );
+            }
+
+            return (
+                <div className="max-w-[1200px] mx-auto p-6">
+                    {/* Header */}
+                    <div className="flex justify-between items-end border-b border-stourio-border pb-4 mb-6">
+                        <div>
+                            <h1 className="text-4xl font-semibold text-stourio-primary tracking-tight">Stourio</h1>
+                            <div className="flex gap-4 mt-4 text-sm font-medium text-stourio-secondary items-center">
+                                {/* Internal SPA Views */}
+                                <button onClick={() => setView('console')} className={view === 'console' ? 'text-stourio-primary underline underline-offset-4' : ''}>Operator Console</button>
+                                <button onClick={() => setView('rules')} className={view === 'rules' ? 'text-stourio-primary underline underline-offset-4' : ''}>Rules Engine</button>
+                                <button onClick={() => setView('audit')} className={view === 'audit' ? 'text-stourio-primary underline underline-offset-4' : ''}>Audit Trail</button>
+                                
+                                {/* Divider */}
+                                <div className="w-px h-4 bg-stourio-border mx-2"></div>
+                                
+                                {/* External Infrastructure Links (Localhost) */}
+                                <a href="/docs" target="_blank" rel="noopener noreferrer" className="hover:text-stourio-primary flex items-center gap-1" title="Swagger UI">
+                                    API Docs <span className="text-xs font-serif">↗</span>
+                                </a>
+                                <a href="http://localhost:5678" target="_blank" rel="noopener noreferrer" className="hover:text-stourio-primary flex items-center gap-1" title="n8n Workflow Editor">
+                                    Automation <span className="text-xs font-serif">↗</span>
+                                </a>
+                                <a href="http://localhost:16686" target="_blank" rel="noopener noreferrer" className="hover:text-stourio-primary flex items-center gap-1" title="OpenTelemetry Traces">
+                                    Tracing <span className="text-xs font-serif">↗</span>
+                                </a>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-4">
+                            {status && (
+                                <div className="text-sm font-medium">
+                                    Status: <span className={status.kill_switch ? 'text-stourio-red' : 'text-stourio-green'}>
+                                        {status.status.toUpperCase()}
+                                    </span>
+                                </div>
+                            )}
+                            <button 
+                                onClick={toggleKillSwitch}
+                                className={`btn ${status?.kill_switch ? 'btn-outline border-stourio-red text-stourio-red' : 'btn-danger'}`}>
+                                {status?.kill_switch ? 'RESUME OPERATIONS' : 'HALT SYSTEM'}
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Views */}
+                    {view === 'console' && <ConsoleView api={api} />}
+                    {view === 'rules' && <RulesView api={api} />}
+                    {view === 'audit' && <AuditView api={api} />}
+                </div>
+            );
+        }
+
+        // --- Console View (Chat & Approvals) ---
+        function ConsoleView({ api }) {
+            const [history, setHistory] = useState([]);
+            const [input, setInput] = useState('');
+            const [approvals, setApprovals] = useState([]);
+            const [loading, setLoading] = useState(false);
+
+            useEffect(() => {
+                const fetchApprovals = () => api('/api/approvals').then(setApprovals).catch(console.error);
+                fetchApprovals();
+                const interval = setInterval(fetchApprovals, 5000);
+                return () => clearInterval(interval);
+            }, []);
+
+            const sendChat = async (e) => {
+                e.preventDefault();
+                if (!input.trim() || loading) return;
+                const userMsg = input;
+                setInput('');
+                setHistory(h => [...h, { role: 'user', content: userMsg }]);
+                setLoading(true);
+                try {
+                    const res = await api('/api/chat', 'POST', { message: userMsg });
+                    setHistory(h => [...h, { role: 'stourio', content: res.message, type: res.type, risk: res.risk_level }]);
+                } catch (e) {
+                    setHistory(h => [...h, { role: 'error', content: 'Failed to reach orchestrator.' }]);
+                }
+                setLoading(false);
+            };
+
+            const handleApproval = async (id, approved) => {
+                await api(`/api/approvals/${id}`, 'POST', { approved, note: 'Action via UI' });
+                api('/api/approvals').then(setApprovals);
+            };
+
+            return (
+                <div className="grid grid-cols-3 gap-6">
+                    {/* Chat Column */}
+                    <div className="col-span-2 flex flex-col h-[70vh] card p-0 overflow-hidden">
+                        <div className="flex-1 p-6 overflow-y-auto bg-stourio-bg/30">
+                            {history.length === 0 && <p className="text-stourio-secondary text-sm">Waiting for input...</p>}
+                            {history.map((msg, i) => (
+                                <div key={i} className={`mb-4 ${msg.role === 'user' ? 'text-right' : 'text-left'}`}>
+                                    <div className={`inline-block p-3 rounded text-sm max-w-[80%] ${msg.role === 'user' ? 'bg-stourio-accent text-white' : 'bg-white border border-stourio-border'}`}>
+                                        <p className="whitespace-pre-wrap">{msg.content}</p>
+                                        {msg.risk && <span className="block mt-2 text-xs font-bold text-stourio-red">Risk: {msg.risk.toUpperCase()}</span>}
+                                    </div>
+                                </div>
+                            ))}
+                            {loading && <p className="text-xs text-stourio-secondary italic">Orchestrator is reasoning...</p>}
+                        </div>
+                        <form onSubmit={sendChat} className="p-4 border-t border-stourio-border bg-white flex gap-2">
+                            <input value={input} onChange={e => setInput(e.target.value)} className="input-field mb-0" placeholder="Instruct Stourio..." />
+                            <button type="submit" className="btn btn-primary whitespace-nowrap" disabled={loading}>Send Signal</button>
+                        </form>
+                    </div>
+
+                    {/* Approvals Column */}
+                    <div className="flex flex-col h-[70vh] overflow-y-auto">
+                        <h3 className="text-xl mb-4 border-b border-stourio-border pb-2">Pending Approvals</h3>
+                        {approvals.length === 0 && <p className="text-sm text-stourio-secondary">No pending actions.</p>}
+                        {approvals.map(app => (
+                            <div key={app.id} className="card mb-4 border-l-4 border-l-stourio-red">
+                                <div className="flex justify-between items-start mb-2">
+                                    <span className="text-xs font-bold bg-stourio-red/10 text-stourio-red px-2 py-1 rounded">RISK: {app.risk_level.toUpperCase()}</span>
+                                    <span className="text-xs text-stourio-secondary">Expires: {new Date(app.expires_at).toLocaleTimeString()}</span>
+                                </div>
+                                <p className="text-sm font-medium mb-2">{app.action_description}</p>
+                                <p className="text-xs text-stourio-secondary mb-4 bg-stourio-bg p-2 rounded font-mono break-all">{app.blast_radius}</p>
+                                <div className="flex gap-2">
+                                    <button onClick={() => handleApproval(app.id, true)} className="btn btn-primary text-sm flex-1">Authorize</button>
+                                    <button onClick={() => handleApproval(app.id, false)} className="btn btn-outline border-stourio-border text-sm flex-1">Reject</button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            );
+        }
+
+        // --- Rules View ---
+        function RulesView({ api }) {
+            const [rules, setRules] = useState([]);
+            const [form, setForm] = useState({ name: '', pattern: '', pattern_type: 'regex', action: 'hard_reject', risk_level: 'critical' });
+
+            const fetchRules = () => api('/api/rules').then(setRules).catch(console.error);
+            useEffect(() => { fetchRules(); }, []);
+
+            const createRule = async (e) => {
+                e.preventDefault();
+                await api('/api/rules', 'POST', form);
+                setForm({ name: '', pattern: '', pattern_type: 'regex', action: 'hard_reject', risk_level: 'critical' });
+                fetchRules();
+            };
+
+            const deleteRule = async (id) => {
+                await api(`/api/rules/${id}`, 'DELETE');
+                fetchRules();
+            };
+
+            return (
+                <div className="grid grid-cols-3 gap-6">
+                    <div className="col-span-2 card">
+                        <h3 className="text-xl mb-4">Active Rules</h3>
+                        <table>
+                            <thead><tr><th>Name</th><th>Pattern</th><th>Type</th><th>Action</th><th></th></tr></thead>
+                            <tbody>
+                                {rules.map(r => (
+                                    <tr key={r.id}>
+                                        <td className="font-medium text-sm">{r.name}</td>
+                                        <td className="font-mono text-xs">{r.pattern}</td>
+                                        <td className="text-xs">{r.pattern_type}</td>
+                                        <td className="text-xs font-bold">{r.action}</td>
+                                        <td><button onClick={() => deleteRule(r.id)} className="text-stourio-red text-xs underline">Del</button></td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                    <div className="card h-fit">
+                        <h3 className="text-xl mb-4">Add Rule</h3>
+                        <form onSubmit={createRule}>
+                            <input className="input-field text-sm" placeholder="Rule Name (e.g., block_drop)" value={form.name} onChange={e => setForm({...form, name: e.target.value})} required />
+                            <input className="input-field text-sm font-mono" placeholder="Pattern" value={form.pattern} onChange={e => setForm({...form, pattern: e.target.value})} required />
+                            <select className="input-field text-sm" value={form.pattern_type} onChange={e => setForm({...form, pattern_type: e.target.value})}>
+                                <option value="regex">Regex</option><option value="keyword">Keyword</option><option value="event_type">Event Type</option>
+                            </select>
+                            <select className="input-field text-sm" value={form.action} onChange={e => setForm({...form, action: e.target.value})}>
+                                <option value="hard_reject">Hard Reject</option><option value="require_approval">Require Approval</option><option value="trigger_automation">Trigger Automation</option>
+                            </select>
+                            <select className="input-field text-sm" value={form.risk_level} onChange={e => setForm({...form, risk_level: e.target.value})}>
+                                <option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="critical">Critical</option>
+                            </select>
+                            <button type="submit" className="btn btn-primary w-full mt-2">Create Rule</button>
+                        </form>
+                    </div>
+                </div>
+            );
+        }
+
+        // --- Audit View ---
+        function AuditView({ api }) {
+            const [logs, setLogs] = useState([]);
+            useEffect(() => { api('/api/audit?limit=100').then(setLogs).catch(console.error); }, []);
+
+            return (
+                <div className="card">
+                    <h3 className="text-xl mb-4">Audit Ledger</h3>
+                    <div className="overflow-x-auto">
+                        <table className="text-sm">
+                            <thead><tr><th>Timestamp</th><th>Action</th><th>Details</th><th>Risk</th></tr></thead>
+                            <tbody>
+                                {logs.map(log => (
+                                    <tr key={log.id}>
+                                        <td className="whitespace-nowrap text-stourio-secondary">{new Date(log.timestamp).toLocaleString()}</td>
+                                        <td className="font-medium">{log.action}</td>
+                                        <td className="font-mono text-xs">{log.detail}</td>
+                                        <td>{log.risk_level && <span className="bg-stourio-bg px-2 py-1 rounded text-xs">{log.risk_level}</span>}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>

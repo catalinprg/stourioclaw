@@ -1,0 +1,14 @@
+# Security
+.env
+*.key
+secrets.json
+
+__pycache__/
+*.py[cod]
+*.class
+.venv/
+venv/
+ENV/
+
+.DS_Store
+*.log
