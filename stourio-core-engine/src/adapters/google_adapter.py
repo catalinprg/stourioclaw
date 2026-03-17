@@ -3,7 +3,7 @@ import json
 from google import genai
 from google.genai import types
 from src.adapters.base import BaseLLMAdapter, LLMResponse
-from src.models.schemas import ChatMessage, ToolDefinition
+from src.models.schemas import ChatMessage, ToolDefinition, TokenUsage
 
 
 class GoogleAdapter(BaseLLMAdapter):
@@ -61,10 +61,16 @@ class GoogleAdapter(BaseLLMAdapter):
                         "arguments": dict(fc.args) if fc.args else {},
                     })
 
+        usage_meta = getattr(response, 'usage_metadata', None)
         return LLMResponse(
             text="\n".join(text_parts) if text_parts else None,
             tool_calls=tool_calls,
-            raw=response,
+            raw={},
+            usage=TokenUsage(
+                input_tokens=getattr(usage_meta, 'prompt_token_count', 0) if usage_meta else 0,
+                output_tokens=getattr(usage_meta, 'candidates_token_count', 0) if usage_meta else 0,
+                total_tokens=getattr(usage_meta, 'total_token_count', 0) if usage_meta else 0,
+            ),
         )
 
     def _format_tools(self, tools: list[ToolDefinition]) -> list[types.Tool]:

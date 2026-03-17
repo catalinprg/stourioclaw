@@ -2,7 +2,7 @@ from __future__ import annotations
 import json
 from openai import AsyncOpenAI
 from src.adapters.base import BaseLLMAdapter, LLMResponse
-from src.models.schemas import ChatMessage, ToolDefinition
+from src.models.schemas import ChatMessage, ToolDefinition, TokenUsage
 
 
 class OpenAIAdapter(BaseLLMAdapter):
@@ -53,7 +53,12 @@ class OpenAIAdapter(BaseLLMAdapter):
         return LLMResponse(
             text=choice.message.content,
             tool_calls=tool_calls,
-            raw=response,
+            raw={},
+            usage=TokenUsage(
+                input_tokens=getattr(response.usage, 'prompt_tokens', 0) if response.usage else 0,
+                output_tokens=getattr(response.usage, 'completion_tokens', 0) if response.usage else 0,
+                total_tokens=getattr(response.usage, 'total_tokens', 0) if response.usage else 0,
+            ),
         )
 
     def _format_tools(self, tools: list[ToolDefinition]) -> list[dict]:

@@ -2,7 +2,7 @@ from __future__ import annotations
 import json
 from anthropic import AsyncAnthropic
 from src.adapters.base import BaseLLMAdapter, LLMResponse
-from src.models.schemas import ChatMessage, ToolDefinition
+from src.models.schemas import ChatMessage, ToolDefinition, TokenUsage
 
 
 class AnthropicAdapter(BaseLLMAdapter):
@@ -57,7 +57,15 @@ class AnthropicAdapter(BaseLLMAdapter):
         return LLMResponse(
             text="\n".join(text_parts) if text_parts else None,
             tool_calls=tool_calls,
-            raw=response,
+            raw={},
+            usage=TokenUsage(
+                input_tokens=getattr(response.usage, 'input_tokens', 0) if response.usage else 0,
+                output_tokens=getattr(response.usage, 'output_tokens', 0) if response.usage else 0,
+                total_tokens=(
+                    getattr(response.usage, 'input_tokens', 0) +
+                    getattr(response.usage, 'output_tokens', 0)
+                ) if response.usage else 0,
+            ),
         )
 
     def _format_tools(self, tools: list[ToolDefinition]) -> list[dict]:

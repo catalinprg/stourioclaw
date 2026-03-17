@@ -3,30 +3,31 @@ import json
 import logging
 from abc import ABC, abstractmethod
 from typing import Any
-from src.models.schemas import ChatMessage, ToolDefinition
+from pydantic import BaseModel, Field, ConfigDict, model_validator
+from src.models.schemas import ChatMessage, ToolDefinition, TokenUsage
 import asyncio
 import time
 
 logger = logging.getLogger("stourio.adapters")
 
 
-class LLMResponse:
+class LLMResponse(BaseModel):
     """Normalized response from any LLM provider."""
 
-    def __init__(
-        self,
-        text: str | None = None,
-        tool_calls: list[dict[str, Any]] | None = None,
-        raw: Any = None,
-    ):
-        self.text = text
-        self.tool_calls = self._validate_tools(tool_calls or [])
-        self.raw = raw
+    text: str | None = None
+    tool_calls: list[dict] | None = None
+    raw: dict = {}
+    usage: TokenUsage = Field(default_factory=TokenUsage)
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
-    def _validate_tools(self, calls: list[dict]) -> list[dict]:
+    @model_validator(mode="after")
+    def _validate_tools(self) -> LLMResponse:
         """Parse string arguments and drop malformed tool calls."""
+        if not self.tool_calls:
+            self.tool_calls = []
+            return self
         valid_calls = []
-        for call in calls:
+        for call in self.tool_calls:
             try:
                 if isinstance(call.get("arguments"), str):
                     call["arguments"] = json.loads(call["arguments"])
@@ -34,15 +35,18 @@ class LLMResponse:
             except json.JSONDecodeError:
                 logger.error(f"Adapter dropped malformed tool call: {call}")
                 continue
-        return valid_calls
+        self.tool_calls = valid_calls
+        return self
 
     @property
     def has_tool_call(self) -> bool:
-        return len(self.tool_calls) > 0
+        return bool(self.tool_calls)
 
     @property
-    def first_tool_call(self) -> dict[str, Any] | None:
-        return self.tool_calls[0] if self.tool_calls else None
+    def first_tool_call(self) -> dict | None:
+        if self.tool_calls:
+            return self.tool_calls[0]
+        return None
 
 
 class BaseLLMAdapter(ABC):

@@ -107,6 +107,7 @@ class RuleAction(str, Enum):
     HARD_REJECT = "hard_reject"
     TRIGGER_AUTOMATION = "trigger_automation"
     FORCE_AGENT = "force_agent"
+    FORCE_CHAIN = "force_chain"
     ALLOW = "allow"
 
 
@@ -118,6 +119,7 @@ class Rule(BaseModel):
     action: RuleAction
     risk_level: RiskLevel = RiskLevel.MEDIUM
     automation_id: Optional[str] = None
+    config: dict = Field(default_factory=dict)
     active: bool = True
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
@@ -127,6 +129,7 @@ class Rule(BaseModel):
 class AgentTemplate(BaseModel):
     id: str
     name: str
+    description: str = ""
     role: str = Field(..., description="System prompt describing the agent's role")
     tools: list[ToolDefinition] = Field(default_factory=list)
     max_steps: int = 10
@@ -138,7 +141,7 @@ class AgentExecution(BaseModel):
     id: str = Field(default_factory=new_id)
     agent_type: str
     objective: str
-    context: str
+    context: str | dict = ""
     status: ExecutionStatus = ExecutionStatus.PENDING
     steps: list[dict[str, Any]] = Field(default_factory=list)
     result: Optional[str] = None
@@ -205,6 +208,45 @@ class ChatResponse(BaseModel):
     execution_id: Optional[str] = None
     approval_required: bool = False
     approval_id: Optional[str] = None
+
+
+class TokenUsage(BaseModel):
+    input_tokens: int = 0
+    output_tokens: int = 0
+    total_tokens: int = 0
+
+
+class AgentMemoryEntry(BaseModel):
+    conversation_id: str
+    agent_template: str
+    trigger_summary: str
+    actions_taken: list[str] = []
+    conclusion: str
+    services_involved: list[str] = []
+    resolution_status: str
+    timestamp: datetime
+
+
+class Notification(BaseModel):
+    channel: str
+    message: str
+    severity: str = "info"
+    context: dict = {}
+    thread_id: str | None = None
+
+
+class NotificationResult(BaseModel):
+    success: bool
+    channel: str
+    error: str | None = None
+
+
+class ApprovalEvent(str, Enum):
+    REQUESTED = "requested"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    EXPIRED = "expired"
+    ESCALATED = "escalated"
 
 
 class SystemStatus(BaseModel):
