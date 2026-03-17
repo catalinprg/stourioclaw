@@ -13,6 +13,7 @@ from src.config import settings
 from src.persistence import redis_store
 from src.orchestrator.core import process
 from src.models.schemas import OrchestratorInput, SignalSource, WebhookSignal
+from src.adapters.registry import init_cached_adapters
 from src.telemetry import setup_tracing
 
 logging.basicConfig(
@@ -144,6 +145,9 @@ async def lifespan(app: FastAPI):
 
     # Initialize reliable messaging infrastructure
     await redis_store.init_consumer_group()
+
+    # Wrap orchestrator adapter with LLM response cache (requires Redis to be ready)
+    await init_cached_adapters()
 
     consumer_task = asyncio.create_task(signal_consumer_worker())
     escalation_task = asyncio.create_task(approval_escalation_worker())

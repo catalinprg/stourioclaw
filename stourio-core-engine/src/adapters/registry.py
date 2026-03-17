@@ -9,6 +9,19 @@ from src.config import settings
 logger = logging.getLogger("stourio.adapters")
 
 
+async def init_cached_adapters():
+    """Wrap orchestrator adapter with cache after Redis is available."""
+    global _orchestrator_adapter
+    # Ensure the adapter is initialized before attempting to wrap it
+    get_orchestrator_adapter()
+    if _orchestrator_adapter and settings.cache_enabled and settings.cache_orchestrator_ttl > 0:
+        from src.adapters.cache import CachedLLMAdapter
+        from src.persistence.redis_store import get_redis
+        redis = await get_redis()
+        _orchestrator_adapter = CachedLLMAdapter(_orchestrator_adapter, redis, settings.cache_orchestrator_ttl)
+        logger.info(f"Orchestrator adapter wrapped with cache (TTL={settings.cache_orchestrator_ttl}s)")
+
+
 def create_adapter(provider: str, model: str) -> BaseLLMAdapter:
     """Factory: create an LLM adapter based on provider name."""
 
