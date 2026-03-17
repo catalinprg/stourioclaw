@@ -5,9 +5,11 @@ from sqlalchemy import select
 from src.config import settings
 from src.models.schemas import (
     ApprovalRequest, ApprovalDecision, RiskLevel, ExecutionStatus, new_id,
+    Notification,
 )
 from src.persistence.database import async_session, ApprovalRecord
 from src.persistence import redis_store, audit
+from src.notifications.dispatcher import get_dispatcher
 
 logger = logging.getLogger("stourio.guardrails")
 
@@ -69,6 +71,17 @@ async def create_approval_request(
         risk_level=risk_level,
     )
 
+    try:
+        dispatcher = get_dispatcher()
+        await dispatcher.send(Notification(
+            channel="oncall-slack",
+            message=f"Approval requested: {action_description} (risk={risk_level.value})",
+            severity="warning",
+            context={"approval_id": approval.id, "risk_level": risk_level.value},
+        ))
+    except Exception as _exc:
+        logger.warning("Notification failed for approval request %s: %s", approval.id, _exc)
+
     return approval
 
 
@@ -118,13 +131,27 @@ async def resolve_approval(
         f"Approval {approval_id}: {status}" + (f" - {decision.note}" if decision.note else ""),
     )
 
-    return ApprovalRequest(
+    resolved = ApprovalRequest(
         id=approval_id,
         action_description=cached["action"],
         risk_level=RiskLevel(cached["risk_level"]),
         original_input_id=cached.get("input_id", ""),
         status=status,
     )
+
+    try:
+        severity = "info" if decision.approved else "warning"
+        dispatcher = get_dispatcher()
+        await dispatcher.send(Notification(
+            channel="oncall-slack",
+            message=f"Approval {status}: {cached['action']}" + (f" — {decision.note}" if decision.note else ""),
+            severity=severity,
+            context={"approval_id": approval_id, "status": status},
+        ))
+    except Exception as _exc:
+        logger.warning("Notification failed for approval resolution %s: %s", approval_id, _exc)
+
+    return resolved
 
 
 async def get_pending_approvals() -> list[dict]:

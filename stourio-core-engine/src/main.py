@@ -60,6 +60,44 @@ async def signal_consumer_worker():
             await asyncio.sleep(5)
 
 
+async def approval_escalation_worker():
+    """Background task to check for stalling approvals and escalate."""
+    import json
+    import time
+    from src.persistence.redis_store import get_redis
+    from src.notifications.dispatcher import get_dispatcher
+    from src.models.schemas import Notification
+
+    redis = await get_redis()
+    while True:
+        try:
+            keys = []
+            async for key in redis.scan_iter("stourio:approval_escalation:*"):
+                keys.append(key)
+            for key in keys:
+                data = await redis.get(key)
+                if not data:
+                    continue
+                info = json.loads(data)
+                if info.get("notified"):
+                    continue
+                if time.time() >= info.get("escalation_time", 0):
+                    dispatcher = get_dispatcher()
+                    await dispatcher.send(Notification(
+                        channel=info.get("channel", "oncall-slack"),
+                        message=f"Approval stalling: {info.get('action', 'unknown')}. Respond urgently.",
+                        severity="critical",
+                        context={"approval_id": info.get("approval_id")},
+                    ))
+                    info["notified"] = True
+                    ttl = await redis.ttl(key)
+                    if ttl > 0:
+                        await redis.setex(key, ttl, json.dumps(info))
+        except Exception as e:
+            logger.error(f"Escalation worker error: {e}")
+        await asyncio.sleep(10)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup and shutdown."""
@@ -108,16 +146,19 @@ async def lifespan(app: FastAPI):
     await redis_store.init_consumer_group()
 
     consumer_task = asyncio.create_task(signal_consumer_worker())
+    escalation_task = asyncio.create_task(approval_escalation_worker())
 
     logger.info("Ready.")
     yield
     logger.info("Shutting down.")
-    
+
     consumer_task.cancel()
-    try:
-        await consumer_task
-    except asyncio.CancelledError:
-        pass
+    escalation_task.cancel()
+    for task in (consumer_task, escalation_task):
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
 
 
 app = FastAPI(
