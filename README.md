@@ -244,6 +244,41 @@ stourio-core-engine/
 stourio-mcp-engine/    # Tool execution gateway (separate service)
 ```
 
+## Claude Code MCP Integration (Planned)
+
+Stourio exposes a full REST API — which means you can connect [Claude Code](https://docs.anthropic.com/en/docs/claude-code) to your running instance via an MCP server and let Claude help you deploy, debug, and operate the entire system from your terminal.
+
+**What this enables:**
+
+```
+You: "Why aren't my agents responding?"
+Claude: [calls stourio_status] → Redis is unreachable. Run: docker-compose restart redis
+
+You: "What happened with the last incident?"
+Claude: [calls stourio_audit] → 3 signals processed in the last hour. The diagnose_repair
+        agent failed at step 4 — Anthropic API returned 429. Failover to OpenAI succeeded.
+
+You: "Add a rule to block DROP TABLE commands"
+Claude: [calls stourio_rules] → Done. Rule 'block_drop_table' created with action: reject.
+```
+
+**Available MCP tools to build:**
+
+| Tool | Maps to | Purpose |
+|------|---------|---------|
+| `stourio_status` | `GET /api/status` | Service health, loaded agents, pool utilization |
+| `stourio_audit` | `GET /api/audit` | Query the decision trail — what happened and why |
+| `stourio_rules` | `GET/POST /api/rules` | List, create, or delete routing rules |
+| `stourio_usage` | `GET /api/usage/summary` | Token costs by provider and agent |
+| `stourio_approvals` | `GET /api/approvals` | Check pending human-in-the-loop actions |
+| `stourio_test` | `POST /api/chat` | Send a test signal through the full pipeline |
+| `stourio_kill` | `POST /api/kill` | Emergency halt |
+| `stourio_logs` | Docker API | Pull container logs to surface errors |
+| `stourio_health` | Docker + DB + Redis | Validate all dependencies are reachable |
+| `stourio_env` | Local `.env` | Check for missing API keys or invalid config |
+
+The MCP server is a thin wrapper (~300 lines) around the existing API. If you want to contribute this, see [Contributing](#contributing).
+
 ## Security
 
 All API endpoints require an `X-STOURIO-KEY` header. The MCP Gateway uses a separate `MCP_SHARED_SECRET` bearer token. Never commit `.env` files — use `.env.example` as a template.
