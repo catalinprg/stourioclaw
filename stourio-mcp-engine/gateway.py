@@ -19,6 +19,7 @@ import logging
 from collections import defaultdict
 from typing import Callable, Awaitable
 
+import httpx
 from fastapi import FastAPI, HTTPException, Security, Depends, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, Field
@@ -312,4 +313,99 @@ async def health():
     return {
         "status": "ok",
         "registered_tools": list(TOOL_REGISTRY.keys()),
+    }
+
+
+# ---------------------------------------------------------------------------
+# 9. Dynamic Tool Registration
+# ---------------------------------------------------------------------------
+
+class RegisterToolRequest(BaseModel):
+    name: str = Field(..., min_length=1, max_length=100, pattern=r"^[a-zA-Z0-9_\-]+$")
+    description: str = Field(default="")
+    parameters: dict = Field(default_factory=dict)
+    handler_type: str = Field(
+        default="proxy",
+        description="Type of handler to create. Currently only 'proxy' is supported.",
+    )
+    # proxy-specific fields
+    proxy_url: str = Field(
+        default="",
+        description="URL to forward execution requests to (required when handler_type='proxy').",
+    )
+    proxy_headers: dict = Field(
+        default_factory=dict,
+        description="Extra headers to include in proxy requests.",
+    )
+
+
+def _create_proxy_handler(definition: RegisterToolRequest) -> ToolHandler:
+    """Return an async handler that proxies execute calls to definition.proxy_url."""
+
+    async def _proxy_handler(arguments: dict) -> dict:
+        url = definition.proxy_url
+        if not url:
+            return {"error": f"Proxy tool '{definition.name}' has no proxy_url configured."}
+
+        headers = dict(definition.proxy_headers)
+        logger.info("Proxy tool '%s': POST %s", definition.name, url)
+
+        try:
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                response = await client.post(
+                    url,
+                    json={"tool_name": definition.name, "arguments": arguments},
+                    headers=headers,
+                )
+                logger.info(
+                    "Proxy tool '%s': response status %s", definition.name, response.status_code
+                )
+                response.raise_for_status()
+                try:
+                    return response.json()
+                except Exception:
+                    return {"result": response.text}
+        except httpx.HTTPStatusError as exc:
+            logger.error(
+                "Proxy tool '%s': HTTP %s from %s",
+                definition.name, exc.response.status_code, url,
+            )
+            return {"error": f"Proxy HTTP {exc.response.status_code}: {exc.response.text[:200]}"}
+        except httpx.HTTPError as exc:
+            logger.error("Proxy tool '%s': network error: %s", definition.name, exc)
+            return {"error": f"Proxy network failure: {exc}"}
+
+    return _proxy_handler
+
+
+@app.post("/tools/register", dependencies=[Depends(verify_token)], status_code=200)
+async def register_dynamic_tool(req: RegisterToolRequest):
+    """
+    Dynamically register a tool on the gateway at runtime.
+    Accepts {name, description, parameters, handler_type, proxy_url, proxy_headers}.
+    Currently supports handler_type='proxy', which forwards execution to proxy_url.
+    """
+    if req.handler_type != "proxy":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported handler_type '{req.handler_type}'. Only 'proxy' is supported.",
+        )
+
+    if not req.proxy_url:
+        raise HTTPException(
+            status_code=400,
+            detail="proxy_url is required when handler_type is 'proxy'.",
+        )
+
+    handler = _create_proxy_handler(req)
+    TOOL_REGISTRY[req.name] = handler
+
+    logger.info(
+        "Dynamic tool registered: '%s' -> proxy -> %s", req.name, req.proxy_url
+    )
+    return {
+        "registered": True,
+        "name": req.name,
+        "handler_type": req.handler_type,
+        "proxy_url": req.proxy_url,
     }
