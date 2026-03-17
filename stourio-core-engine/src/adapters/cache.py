@@ -3,6 +3,7 @@ import json
 import logging
 from redis.asyncio import Redis
 from src.adapters.base import BaseLLMAdapter, LLMResponse
+from src.models.schemas import TokenUsage
 
 logger = logging.getLogger("stourio.adapters.cache")
 
@@ -50,17 +51,24 @@ class CachedLLMAdapter:
         if cached:
             logger.debug(f"Cache HIT: {key[:40]}...")
             data = json.loads(cached)
+            usage_data = data.get("usage", {})
             return LLMResponse(
                 text=data.get("text"),
                 tool_calls=data.get("tool_calls"),
                 raw=data.get("raw", {}),
+                usage=TokenUsage(**usage_data) if usage_data else TokenUsage(),
             )
 
         result = await self.adapter.complete(system_prompt, messages, tools, temperature)
 
         try:
             cache_data = json.dumps(
-                {"text": result.text, "tool_calls": result.tool_calls, "raw": {}},
+                {
+                    "text": result.text,
+                    "tool_calls": result.tool_calls,
+                    "raw": {},
+                    "usage": result.usage.model_dump() if result.usage else {},
+                },
                 default=str,
             )
             await self.redis.setex(key, self.ttl, cache_data)
