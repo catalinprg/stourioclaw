@@ -11,6 +11,7 @@ from src.guardrails.approvals import create_approval_request, check_kill_switch
 from src.agents.runtime import list_templates
 from src.orchestrator.concurrency import get_pool
 from src.automation.workflows import execute_workflow, list_workflows
+from src.orchestrator.chains import execute_chain, list_chains
 from src.persistence import audit
 from src.telemetry import tracer
 
@@ -20,16 +21,19 @@ logger = logging.getLogger("stourio.orchestrator")
 SYSTEM_PROMPT = """You are Stourio, an AI operations orchestrator. Your job is to analyze incoming
 signals (user requests or system events) and decide the best course of action.
 
-You have two types of capabilities:
+You have three types of capabilities:
 1. AI AGENTS - for dynamic, novel, or complex situations requiring reasoning
 2. AUTOMATION - for known patterns with predefined workflows
+3. CHAINS - for complex workflows requiring multiple agents in sequence or parallel
 
 Available agent types: {agent_types}
 Available automation workflows: {workflow_ids}
+Available chains: {chain_ids}
 
 For each input, you MUST respond by calling exactly one of these tools:
 - route_to_agent: when the situation needs reasoning, diagnosis, or adaptive response
 - route_to_automation: when a known workflow matches the situation
+- route_to_chain: when the situation requires multiple agents working in sequence or parallel
 - respond_directly: when you can answer the user without taking action
 - request_more_info: when the input is ambiguous and you need clarification
 
@@ -107,6 +111,18 @@ ROUTING_TOOLS = [
                 "reasoning": {"type": "string"},
             },
             "required": ["question"],
+        },
+    ),
+    ToolDefinition(
+        name="route_to_chain",
+        description="Route to a multi-agent chain for complex workflows requiring multiple agents",
+        parameters={
+            "type": "object",
+            "properties": {
+                "chain_name": {"type": "string", "description": "Name of the chain to execute"},
+                "context": {"type": "string", "description": "Additional context for the chain"},
+            },
+            "required": ["chain_name"],
         },
     ),
 ]
@@ -219,13 +235,24 @@ async def _process_inner(signal: OrchestratorInput, span) -> dict:
             )
             return {"status": "ok", "message": result.result, "execution_id": result.id, "type": "agent"}
 
+        if matched_rule.action == RuleAction.FORCE_CHAIN:
+            chain_name = matched_rule.config.get("chain_name")
+            result = await execute_chain(
+                chain_name=chain_name,
+                context={"signal": signal.content, "rule_id": matched_rule.id},
+                input_id=signal.id,
+                conversation_id=signal.conversation_id,
+            )
+            return {"status": "ok", "message": result.get("summary", ""), "execution_id": result.get("id", ""), "type": "chain"}
+
     # --- Step 2: LLM routing ---
     adapter = get_orchestrator_adapter()
 
     agent_types = ", ".join(t.id for t in list_templates())
     workflow_ids = ", ".join(w.id for w in list_workflows())
+    chain_ids = ", ".join(c.name for c in list_chains())
 
-    system = SYSTEM_PROMPT.format(agent_types=agent_types, workflow_ids=workflow_ids)
+    system = SYSTEM_PROMPT.format(agent_types=agent_types, workflow_ids=workflow_ids, chain_ids=chain_ids)
     messages = [ChatMessage(role="user", content=signal.content)]
 
     try:
@@ -347,6 +374,25 @@ async def _process_inner(signal: OrchestratorInput, span) -> dict:
             "agent_type": agent_type,
             "steps": execution.steps,
             "reasoning": args.get("reasoning", ""),
+        }
+
+    # --- route_to_chain ---
+    if tool_name == "route_to_chain":
+        chain_name = args.get("chain_name", "")
+        extra_context = args.get("context", "")
+        result = await execute_chain(
+            chain_name=chain_name,
+            context={"signal": signal.content, "context": extra_context},
+            input_id=signal.id,
+            conversation_id=signal.conversation_id,
+        )
+        return {
+            "status": "ok",
+            "message": result.get("summary", ""),
+            "execution_id": result.get("id", ""),
+            "type": "chain",
+            "chain": chain_name,
+            "steps": result.get("steps", {}),
         }
 
     # Unknown tool call
