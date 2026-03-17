@@ -329,6 +329,7 @@ async def _process_inner(signal: OrchestratorInput, span) -> dict:
             objective=args.get("objective", signal.content),
             context=signal.content,
             input_id=signal.id,
+            conversation_id=signal.conversation_id,
         )
         return {
             "status": execution.status.value,

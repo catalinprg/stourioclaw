@@ -10,6 +10,7 @@ from src.models.schemas import (
 )
 from src.adapters.registry import get_agent_adapter
 from src.persistence import redis_store, audit
+from src.persistence.conversations import get_history
 
 logger = logging.getLogger("stourio.agents")
 
@@ -179,6 +180,7 @@ async def execute_agent(
     context: str,
     input_id: str | None = None,
     tool_executor: callable | None = None,
+    conversation_id: str | None = None,
 ) -> AgentExecution:
     template = get_template(agent_type)
     if not template:
@@ -226,6 +228,25 @@ async def execute_agent(
             ChatMessage(role="user", content=f"Objective: {objective}\n\nContext:\n{context}")
         ]
 
+        # Load conversation history
+        if conversation_id:
+            history = await get_history(conversation_id, limit=settings.conversation_history_limit)
+            if history:
+                history_context = "\n".join(f"[{m.role}]: {m.content}" for m in history)
+                messages.insert(0, ChatMessage(role="user", content=f"Previous conversation context:\n{history_context}"))
+
+        # Semantic memory recall
+        system_prompt = template.role
+        from src.tools.python.knowledge_search import _retriever
+        if _retriever:
+            try:
+                memories = await _retriever.search(query=objective, source_type="agent_memory", top_k_final=settings.agent_memory_recall_count)
+                if memories:
+                    memory_text = "\n\n".join(f"- {m.content} (score: {m.score:.2f})" for m in memories)
+                    system_prompt = system_prompt + f"\n\nRelevant past experience:\n{memory_text}"
+            except Exception as e:
+                logger.warning(f"Memory recall failed: {e}")
+
         for step in range(template.max_steps):
             # 1. Kill switch check
             if await redis_store.is_killed():
@@ -252,37 +273,37 @@ async def execute_agent(
             # 3. LLM Reasoning Call with Execution Failover
             try:
                 response = await adapter.complete(
-                    system_prompt=template.role,
+                    system_prompt=system_prompt,
                     messages=messages,
                     tools=template.tools,
                 )
             except Exception as llm_error:
                 fallback_provider = settings.agent_provider
                 fallback_model = settings.agent_model
-                
+
                 # If we are already using the fallback, there is nowhere to fail over to
                 if current_provider == fallback_provider and current_model == fallback_model:
                     raise Exception(f"Primary provider {current_provider} failed and no secondary fallback exists: {str(llm_error)}")
-                
+
                 logger.warning(
                     f"Provider outage ({current_provider}) for agent {agent_type}. "
                     f"Initiating failover to fallback config ({fallback_provider} / {fallback_model}). Error: {str(llm_error)}"
                 )
-                
+
                 await audit.log(
                     "AGENT_FAILOVER",
                     f"Provider {current_provider} failed. Failing over to {fallback_provider}.",
                     execution_id=execution.id,
                 )
-                
+
                 # Swap state to fallback configuration
                 current_provider = fallback_provider
                 current_model = fallback_model
                 adapter = get_agent_adapter(current_provider, current_model)
-                
+
                 # Retry the exact same prompt against the fallback provider
                 response = await adapter.complete(
-                    system_prompt=template.role,
+                    system_prompt=system_prompt,
                     messages=messages,
                     tools=template.tools,
                 )
@@ -349,5 +370,32 @@ async def execute_agent(
     finally:
         heartbeat_task.cancel()
         await redis_store.release_lock(resource_id)
+
+    # Persist agent memory
+    try:
+        from src.rag.ingestion import ingest_text
+        from src.tools.python.knowledge_search import _retriever
+        if _retriever and execution.result:
+            actions = [s.get("tool_name", s.get("tool", "unknown")) for s in execution.steps if s.get("tool_name") or s.get("tool")]
+            memory_text = (
+                f"# Agent Execution: {agent_type}\n"
+                f"## Trigger\n{objective}\n"
+                f"## Actions Taken\n{', '.join(actions)}\n"
+                f"## Conclusion\n{execution.result}\n"
+            )
+            await ingest_text(
+                embedder=_retriever.embedder,
+                content=memory_text,
+                source_type="agent_memory",
+                source_path=f"agent/{execution.id}",
+                title=f"{agent_type} - {objective[:100]}",
+                extra_metadata={
+                    "agent_template": agent_type,
+                    "execution_id": execution.id,
+                    "conversation_id": conversation_id or "",
+                },
+            )
+    except Exception as e:
+        logger.warning(f"Failed to persist agent memory: {e}")
 
     return execution
