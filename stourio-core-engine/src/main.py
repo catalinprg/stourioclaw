@@ -87,6 +87,23 @@ async def lifespan(app: FastAPI):
     await seed_default_rules()
     init_registry()
 
+    # RAG pipeline initialization
+    from src.rag.embeddings.openai_embedder import OpenAIEmbedder
+    from src.rag.reranker.cohere_reranker import CohereReranker
+    from src.rag.retriever import Retriever
+    from src.rag.ingestion import ingest_runbooks
+    from src.tools.python.knowledge_search import set_retriever
+
+    embedder = OpenAIEmbedder(api_key=settings.openai_api_key, model=settings.embedding_model)
+    assert embedder.dimension == settings.embedding_dimension, f"Embedder dimension mismatch"
+    reranker = None
+    if settings.reranker_provider == "cohere" and settings.cohere_api_key:
+        reranker = CohereReranker(api_key=settings.cohere_api_key)
+    retriever = Retriever(embedder=embedder, reranker=reranker)
+    set_retriever(retriever)
+    count = await ingest_runbooks(embedder)
+    logger.info(f"Ingested {count} runbook chunks")
+
     # Initialize reliable messaging infrastructure
     await redis_store.init_consumer_group()
 

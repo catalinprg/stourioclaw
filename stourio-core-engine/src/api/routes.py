@@ -199,3 +199,16 @@ async def status():
 @router.get("/audit")
 async def audit_log(limit: int = 50):
     return await audit.get_recent(limit=limit)
+
+
+# =============================================================================
+# DOCUMENTS - RAG ingestion
+# =============================================================================
+
+@router.post("/documents/ingest")
+async def ingest_documents(api_key: str = Depends(get_api_key)):
+    from src.rag.embeddings.openai_embedder import OpenAIEmbedder
+    from src.rag.ingestion import ingest_runbooks
+    embedder = OpenAIEmbedder(api_key=settings.openai_api_key, model=settings.embedding_model)
+    count = await ingest_runbooks(embedder)
+    return {"status": "ok", "chunks_ingested": count}
