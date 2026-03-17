@@ -8,6 +8,7 @@ from src.api.routes import router
 from src.api.rate_limit import RateLimitMiddleware
 from src.persistence.database import init_db
 from src.rules.engine import seed_default_rules
+from src.plugins.registry import init_registry
 from src.config import settings
 from src.persistence import redis_store
 from src.orchestrator.core import process
@@ -84,7 +85,8 @@ async def lifespan(app: FastAPI):
 
     await init_db()
     await seed_default_rules()
-    
+    init_registry()
+
     # Initialize reliable messaging infrastructure
     await redis_store.init_consumer_group()
 
