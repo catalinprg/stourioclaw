@@ -1,0 +1,11 @@
+chains:
+  incident_response:
+    type: pipeline
+    description: Standard incident response pipeline
+    steps:
+      - agent: diagnose_repair
+        input_mapping: {}
+      - agent: escalate
+        input_mapping:
+          diagnosis: "{{ previous.conclusion }}"
+        condition: "{{ previous.resolution_status == 'escalated' }}"
