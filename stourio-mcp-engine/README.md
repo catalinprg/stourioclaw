@@ -138,4 +138,4 @@ The tool is immediately available to any Stourio agent whose template includes a
 
 ## License
 
-Private. Internal use only.
+Apache License 2.0 — see [LICENSE](../LICENSE).

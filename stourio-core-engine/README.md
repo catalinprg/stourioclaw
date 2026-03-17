@@ -27,27 +27,24 @@ text
 - Kill switch: one API call halts everything.
 - Full audit trail: every signal, every routing decision, every tool call. Immutable. Queryable.
 
-## Quick start
+## Quick Start
 
-## Prerequisites
-- Docker and Docker Compose
+### Prerequisites
+- Docker and Docker Compose v2+
 - At least one LLM API key (OpenAI, Anthropic, Google, or DeepSeek)
 
-## Setup
-Do not attempt to configure this project by double-clicking files in macOS Finder or Windows Explorer. Hidden files (dotfiles) will trigger OS security warnings or remain invisible. Use your terminal and a code editor.
+### Setup
 
-```
+```bash
 # 1. Clone and enter
-git clone <your-repo-url>
-cd stourio
+git clone https://github.com/catalinprg/ai-ops-engine.git
+cd ai-ops-engine/stourio-core-engine
 
-# 2. Bootstrap the environment
+# 2. Bootstrap the environment (generates API key, DB and Redis passwords)
 chmod +x scripts/setup.sh
 ./scripts/setup.sh
 
-# 3. Add your configuration
-# Open the newly created .env file in your code editor (e.g., VS Code, nano).
-# Set the orchestrator (routing) and fallback agent providers:
+# 3. Add your LLM configuration to .env
 # ORCHESTRATOR_PROVIDER=openai
 # ORCHESTRATOR_MODEL=gpt-4o-mini
 # AGENT_PROVIDER=anthropic           (fallback for agents without overrides)
@@ -58,7 +55,7 @@ chmod +x scripts/setup.sh
 docker-compose up --build
 
 # 5. Open API docs
-http://localhost:8000/docs
+# http://localhost:8000/docs
 ```
 
 ## Security (Mandatory)
@@ -100,6 +97,9 @@ This runs through: simple chat, agent routing, webhook signals, rule interceptio
 | `/api/rules` | GET/POST | List or create routing rules |
 | `/api/rules/{id}` | DELETE | Delete a rule |
 | `/api/audit` | GET | Query the audit trail |
+| `/api/usage` | GET | Token usage by date range |
+| `/api/usage/summary` | GET | Aggregated usage by provider/agent |
+| `/api/documents/ingest` | POST | Trigger runbook re-ingestion |
 
 ## Architecture
 
@@ -125,7 +125,23 @@ src/
 
 ### Add a new agent template
 
-Edit `src/agents/runtime.py` and add to `AGENT_TEMPLATES`. Define the role (system prompt), available tools, and optionally a `provider_override` and `model_override` to run the agent on a specific LLM. If omitted, the agent uses the `AGENT_PROVIDER`/`AGENT_MODEL` fallback from `.env`.
+Drop a `.yaml` file in `config/agents/`. The engine merges YAML templates with the built-in defaults at startup — YAML definitions override built-ins with the same `id`.
+
+```yaml
+id: diagnose_database
+name: diagnose_database
+description: Database operations specialist
+system_prompt: |
+  You are a database specialist. You diagnose PostgreSQL, MySQL, and Redis issues.
+tools:
+  - search_knowledge
+  - get_system_metrics
+  - get_recent_logs
+provider_override: anthropic/claude-3-5-sonnet-latest
+max_steps: 8
+```
+
+Set `provider_override` to run the agent on a specific LLM. If omitted, the agent uses the `AGENT_PROVIDER`/`AGENT_MODEL` fallback from `.env`.
 
 ## Per-Agent LLM Configuration
 
@@ -200,16 +216,9 @@ The system seeds these safety rules on first start:
 | block_rm_rf | `rm -rf /` | Hard reject |
 | auto_scale_cpu | `CPU > 9x%` | Trigger automation |
 
-### Running with Docker Desktop (GUI, no terminal required)
-If you prefer using Docker Desktop (the app with the whale icon) instead of the terminal for daily operations, follow these steps:
-First-time setup (Terminal required once)
+### Running with Docker Desktop (GUI)
 
-```
-cd stourio
-./scripts/setup.sh
-# Edit .env in your code editor
-docker-compose up --build
-```
+First-time setup requires a terminal (see Quick Start above). After that:
 
 ### Day-to-day usage
 1. Open Docker Desktop on your Mac or Windows machine.
@@ -244,5 +253,6 @@ If you change API keys or settings in `.env`:
 
 In Docker Desktop, click on the `stourio-stourio-1` container, then the **Logs** tab. All errors will be visible there. If you need a full rebuild after code changes, you'll need one terminal command: `docker-compose up --build`
 
-### License
-Private. Internal use only.
+## License
+
+Apache License 2.0 — see [LICENSE](../LICENSE).

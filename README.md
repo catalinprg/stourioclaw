@@ -1,6 +1,8 @@
 # Stourio Engine
 
-LLM-agnostic autonomous operations engine. Routes operational signals through deterministic rules, then LLM-based decision-making, with safety guardrails and full audit trails.
+An open-source, LLM-agnostic operations engine that turns alerts, incidents, and human requests into autonomous action — with deterministic rules, AI agents, human approval gates, and full audit trails.
+
+**Why?** Most AI-ops tools lock you into one LLM provider, skip safety checks, and offer no visibility into what the AI decided or why. Stourio routes every signal through deterministic rules first (fast, cheap, predictable), falls back to LLM-based reasoning only when needed, and logs every decision immutably.
 
 ## Architecture
 
@@ -37,17 +39,25 @@ Signal (user/system)
 - **Full Audit Trail**: Immutable, queryable history of every decision
 - **OpenTelemetry**: Distributed tracing with Jaeger integration
 
+## Prerequisites
+
+- Docker and Docker Compose v2+
+- At least one LLM API key (OpenAI, Anthropic, Google, or DeepSeek)
+
 ## Quick Start
 
 ```bash
 # Clone
-git clone https://github.com/your-org/stourio-engine.git
-cd stourio-engine/stourio-core-engine
+git clone https://github.com/catalinprg/ai-ops-engine.git
+cd ai-ops-engine/stourio-core-engine
 
-# Setup
-cp .env.example .env
-./scripts/setup.sh        # generates API key, sets passwords
-./scripts/generate_key.py # if setup.sh doesn't run
+# Bootstrap (generates API key, DB and Redis passwords)
+chmod +x scripts/setup.sh
+./scripts/setup.sh
+
+# Add your LLM API keys to .env
+# OPENAI_API_KEY=sk-...
+# ANTHROPIC_API_KEY=sk-ant-...
 
 # Start
 docker-compose up --build
@@ -97,9 +107,11 @@ All endpoints require `X-STOURIO-KEY` header.
 | `/api/usage/summary` | GET | Aggregated usage by provider/agent |
 | `/api/documents/ingest` | POST | Trigger runbook re-ingestion |
 
-## Adding Tools
+## Extending
 
-### YAML (HTTP-based tools)
+### Adding Tools
+
+#### YAML (HTTP-based tools)
 
 Drop a `.yaml` file in the configured tools directory:
 
@@ -120,7 +132,7 @@ execution:
   mode: local  # or gateway
 ```
 
-### Python (complex logic)
+#### Python (complex logic)
 
 Drop a `.py` file in the tools directory:
 
@@ -136,9 +148,9 @@ class MyTool(BaseTool):
         return {"result": f"processed {arguments['input']}"}
 ```
 
-## Adding Agent Templates
+### Adding Agent Templates
 
-Drop a `.yaml` file in `config/agents/`:
+The engine ships with three built-in agents (`diagnose_repair`, `escalate`, `take_action`). To add or override agents, drop a `.yaml` file in `config/agents/`:
 
 ```yaml
 id: diagnose_database
@@ -154,7 +166,7 @@ provider_override: anthropic/claude-3-5-sonnet-latest
 max_steps: 8
 ```
 
-## Adding Notification Channels
+### Adding Notification Channels
 
 Edit `config/notifications.yaml`:
 
@@ -231,6 +243,16 @@ stourio-core-engine/
 
 stourio-mcp-engine/    # Tool execution gateway (separate service)
 ```
+
+## Security
+
+All API endpoints require an `X-STOURIO-KEY` header. The MCP Gateway uses a separate `MCP_SHARED_SECRET` bearer token. Never commit `.env` files — use `.env.example` as a template.
+
+To report a security vulnerability, please open a [GitHub issue](https://github.com/catalinprg/ai-ops-engine/issues) with the `security` label.
+
+## Contributing
+
+Contributions are welcome. Please open an issue to discuss your proposed change before submitting a pull request.
 
 ## License
 
