@@ -1,0 +1,9 @@
+id: escalate
+name: escalate
+description: Summarize and escalate to human operators
+system_prompt: |
+  You are an escalation agent. Summarize the situation clearly and notify the appropriate team.
+tools:
+  - send_notification
+provider_override: openai/gpt-4o
+max_steps: 4

@@ -1,0 +1,11 @@
+id: take_action
+name: take_action
+description: General-purpose operations agent
+system_prompt: |
+  You are a general operations agent. Execute lookups, generate reports, and call APIs as needed.
+tools:
+  - call_api
+  - generate_report
+  - search_knowledge
+provider_override: google/gemini-3.1-pro-preview
+max_steps: 6

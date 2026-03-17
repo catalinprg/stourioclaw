@@ -139,6 +139,57 @@ Use the available tools to complete the user's request. Report results clearly."
 }
 
 
+def load_agent_templates(directory: str | None = None) -> dict[str, AgentTemplate]:
+    import os
+    import yaml as yaml_lib
+    from src.plugins.registry import get_registry
+
+    dir_path = directory or settings.agent_templates_dir
+    templates = dict(AGENT_TEMPLATES)  # Start with built-in defaults
+    if not os.path.isdir(dir_path):
+        return templates
+    for filename in sorted(os.listdir(dir_path)):
+        if not filename.endswith((".yaml", ".yml")):
+            continue
+        filepath = os.path.join(dir_path, filename)
+        try:
+            with open(filepath, "r") as f:
+                defn = yaml_lib.safe_load(f)
+            if not defn or "id" not in defn:
+                continue
+            provider_override = model_override = None
+            if "provider_override" in defn:
+                parts = defn["provider_override"].split("/", 1)
+                provider_override = parts[0]
+                model_override = parts[1] if len(parts) > 1 else None
+            tool_defs = []
+            registry = get_registry()
+            for tool_name in defn.get("tools", []):
+                tool = registry.get(tool_name)
+                if tool:
+                    td = tool.to_tool_definition()
+                    tool_defs.append(ToolDefinition(
+                        name=td["name"],
+                        description=td["description"],
+                        parameters=td["parameters"],
+                    ))
+            template = AgentTemplate(
+                id=defn["id"],
+                name=defn.get("name", defn["id"]),
+                description=defn.get("description", ""),
+                role=defn.get("system_prompt", ""),
+                tools=tool_defs,
+                max_steps=defn.get("max_steps", 8),
+                provider_override=provider_override,
+                model_override=model_override,
+            )
+            templates[defn["id"]] = template
+            logger.info(f"Loaded agent template: {defn['id']} from {filepath}")
+        except Exception as e:
+            logger.error(f"Failed to load agent template {filepath}: {e}")
+    return templates
+
+
 def get_template(agent_type: str) -> AgentTemplate | None:
     return AGENT_TEMPLATES.get(agent_type)
 
