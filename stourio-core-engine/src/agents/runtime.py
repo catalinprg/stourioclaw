@@ -1,9 +1,10 @@
 from __future__ import annotations
+import json
 import logging
 import asyncio
-import httpx
 from datetime import datetime
 from src.config import settings
+from src.plugins.registry import get_registry
 from src.models.schemas import (
     AgentTemplate, AgentExecution, ExecutionStatus, ChatMessage, ToolDefinition, new_id,
 )
@@ -147,64 +148,29 @@ def list_templates() -> list[AgentTemplate]:
 
 import re
 
-# Build whitelist of valid tool names from all agent templates at import time
-_VALID_TOOL_NAMES: set[str] | None = None
-
-def _get_valid_tool_names() -> set[str]:
-    global _VALID_TOOL_NAMES
-    if _VALID_TOOL_NAMES is None:
-        _VALID_TOOL_NAMES = set()
-        for template in AGENT_TEMPLATES.values():
-            for tool in template.tools:
-                _VALID_TOOL_NAMES.add(tool.name)
-    return _VALID_TOOL_NAMES
-
 # Strict pattern: alphanumeric, underscores, hyphens only
 _SAFE_TOOL_NAME = re.compile(r"^[a-zA-Z0-9_\-]+$")
 
 
 async def default_tool_executor(tool_name: str, arguments: dict) -> str:
     """
-    Production tool executor. Routes LLM tool calls to the MCP gateway's
-    single /execute endpoint. The gateway dispatches internally by tool_name.
+    Production tool executor. Dispatches LLM tool calls via the ToolRegistry.
+    Each tool's execution_mode determines local vs gateway dispatch.
     """
-    # SECURITY: reject tool names not in whitelist
-    valid_names = _get_valid_tool_names()
-    if tool_name not in valid_names:
-        logger.warning(f"SECURITY: LLM requested unknown tool '{tool_name}'. Rejected.")
-        return f'{{"error": "Unknown tool: {tool_name}. Not in allowed set."}}'
+    registry = get_registry()
 
-    # SECURITY: reject path traversal characters even if name passed whitelist
     if not _SAFE_TOOL_NAME.match(tool_name):
         logger.warning(f"SECURITY: Tool name contains illegal characters: '{tool_name}'")
-        return '{"error": "Invalid tool name format."}'
-
-    if not settings.mcp_server_url:
-        logger.error("MCP_SERVER_URL not configured. Cannot execute tool calls.")
-        return '{"error": "MCP gateway not configured. Set MCP_SERVER_URL in .env."}'
+        return json.dumps({"error": f"Invalid tool name: {tool_name}"})
 
     try:
-        headers = {}
-        if settings.mcp_shared_secret:
-            headers["Authorization"] = f"Bearer {settings.mcp_shared_secret}"
-
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.post(
-                f"{settings.mcp_server_url}/execute",
-                json={"tool_name": tool_name, "arguments": arguments},
-                headers=headers,
-            )
-            response.raise_for_status()
-            return response.text
-    except httpx.HTTPStatusError as e:
-        logger.error(f"Tool execution HTTP error [{tool_name}]: {e.response.status_code} {e.response.text[:200]}")
-        return f'{{"error": "Gateway returned {e.response.status_code} for tool {tool_name}."}}'
-    except httpx.HTTPError as e:
-        logger.error(f"Tool execution network failure [{tool_name}]: {e}")
-        return f'{{"error": "Execution network failure: {str(e)}"}}'
+        result = await registry.execute(tool_name, arguments)
+        return json.dumps(result) if isinstance(result, dict) else str(result)
+    except ValueError as e:
+        return json.dumps({"error": str(e)})
     except Exception as e:
-        logger.error(f"Tool execution critical failure [{tool_name}]: {e}")
-        return f'{{"error": "Internal error: {str(e)}"}}'
+        logger.error(f"Tool execution failed: {tool_name}: {e}")
+        return json.dumps({"error": f"Tool execution failed: {str(e)}"})
 
 
 async def execute_agent(
