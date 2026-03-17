@@ -17,7 +17,8 @@ from src.guardrails.approvals import (
     resolve_approval, get_pending_approvals,
 )
 from src.rules.engine import get_rules, add_rule, remove_rule
-from src.agents.runtime import list_templates, execute_agent
+from src.agents.runtime import list_templates
+from src.orchestrator.concurrency import get_pool
 from src.automation.workflows import list_workflows
 
 logger = logging.getLogger("stourio.api")
@@ -115,7 +116,7 @@ async def decide_approval(approval_id: str, decision: ApprovalDecision):
         except (json.JSONDecodeError, TypeError):
             pass  # Fall back to defaults if blast_radius isn't JSON
 
-        exec_result = await execute_agent(
+        exec_result = await get_pool().execute(
             agent_type=agent_type,
             objective=objective,
             context=context,
@@ -193,6 +194,7 @@ async def status():
         "pending_approvals": len(approvals),
         "agents": [t.model_dump() for t in list_templates()],
         "workflows": [w.model_dump() for w in list_workflows()],
+        "agent_pool": get_pool().status(),
     }
 
 

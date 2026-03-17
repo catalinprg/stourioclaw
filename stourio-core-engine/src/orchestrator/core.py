@@ -8,7 +8,8 @@ from src.models.schemas import (
 from src.adapters.registry import get_orchestrator_adapter
 from src.rules.engine import get_rules, evaluate
 from src.guardrails.approvals import create_approval_request, check_kill_switch
-from src.agents.runtime import execute_agent, list_templates
+from src.agents.runtime import list_templates
+from src.orchestrator.concurrency import get_pool
 from src.automation.workflows import execute_workflow, list_workflows
 from src.persistence import audit
 from src.telemetry import tracer
@@ -208,8 +209,15 @@ async def _process_inner(signal: OrchestratorInput, span) -> dict:
                 }
 
         if matched_rule.action == RuleAction.FORCE_AGENT:
-            # Fall through to agent execution below
-            pass
+            agent_type = matched_rule.config.get("agent_type", "diagnose_repair")
+            result = await get_pool().execute(
+                agent_type=agent_type,
+                objective=signal.content,
+                context={"rule_id": matched_rule.id, "source": "forced"},
+                input_id=signal.id,
+                conversation_id=signal.conversation_id,
+            )
+            return {"status": "ok", "message": result.result, "execution_id": result.id, "type": "agent"}
 
     # --- Step 2: LLM routing ---
     adapter = get_orchestrator_adapter()
@@ -324,7 +332,7 @@ async def _process_inner(signal: OrchestratorInput, span) -> dict:
             }
 
         # Low/medium risk: execute immediately
-        execution = await execute_agent(
+        execution = await get_pool().execute(
             agent_type=agent_type,
             objective=args.get("objective", signal.content),
             context=signal.content,
