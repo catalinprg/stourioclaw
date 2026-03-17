@@ -12,6 +12,8 @@ from src.plugins.registry import init_registry
 from src.config import settings
 from src.persistence import redis_store
 from src.orchestrator.core import process
+from src.orchestrator.chains import load_chains
+from src.agents.runtime import load_agent_templates
 from src.models.schemas import OrchestratorInput, SignalSource, WebhookSignal
 from src.adapters.registry import init_cached_adapters
 from src.telemetry import setup_tracing
@@ -102,13 +104,50 @@ async def approval_escalation_worker():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup and shutdown."""
-    from src.agents.runtime import list_templates as _list_templates
+    # 1. Database
+    await init_db()
+    await seed_default_rules()
 
+    # 2. Redis consumer group
+    await redis_store.init_consumer_group()
+
+    # 3. Plugin system
+    init_registry()
+
+    # 4. RAG pipeline
+    from src.rag.embeddings.openai_embedder import OpenAIEmbedder
+    from src.rag.reranker.cohere_reranker import CohereReranker
+    from src.rag.retriever import Retriever
+    from src.rag.ingestion import ingest_runbooks
+    from src.tools.python.knowledge_search import set_retriever
+
+    embedder = OpenAIEmbedder(api_key=settings.openai_api_key, model=settings.embedding_model)
+    assert embedder.dimension == settings.embedding_dimension, "Embedder dimension mismatch"
+    reranker = None
+    if settings.reranker_provider == "cohere" and settings.cohere_api_key:
+        reranker = CohereReranker(api_key=settings.cohere_api_key)
+    retriever = Retriever(embedder=embedder, reranker=reranker)
+    set_retriever(retriever)
+    count = await ingest_runbooks(embedder)
+    logger.info(f"Ingested {count} runbook chunks")
+
+    # 5. Chain definitions
+    load_chains(settings.chains_config_path)
+
+    # 6. Agent templates (YAML overrides loaded after plugin registry is ready)
+    loaded_templates = load_agent_templates(settings.agent_templates_dir)
+    import src.agents.runtime as _runtime_mod
+    _runtime_mod.AGENT_TEMPLATES.update(loaded_templates)
+
+    # 7. Wrap orchestrator adapter with LLM response cache (requires Redis to be ready)
+    await init_cached_adapters()
+
+    # Startup banner (after templates are loaded)
     logger.info("=" * 60)
     logger.info("STOURIO - Operational Intelligence Framework")
     logger.info(f"Orchestrator: {settings.orchestrator_provider} / {settings.orchestrator_model}")
     logger.info(f"Agent fallback: {settings.agent_provider} / {settings.agent_model}")
-    for _t in _list_templates():
+    for _t in _runtime_mod.AGENT_TEMPLATES.values():
         _p = _t.provider_override or settings.agent_provider
         _m = _t.model_override or settings.agent_model
         _src = "override" if _t.provider_override else "fallback"
@@ -121,34 +160,7 @@ async def lifespan(app: FastAPI):
         logger.warning("Run: python3 scripts/generate_key.py")
         logger.warning("!" * 60)
 
-
-    await init_db()
-    await seed_default_rules()
-    init_registry()
-
-    # RAG pipeline initialization
-    from src.rag.embeddings.openai_embedder import OpenAIEmbedder
-    from src.rag.reranker.cohere_reranker import CohereReranker
-    from src.rag.retriever import Retriever
-    from src.rag.ingestion import ingest_runbooks
-    from src.tools.python.knowledge_search import set_retriever
-
-    embedder = OpenAIEmbedder(api_key=settings.openai_api_key, model=settings.embedding_model)
-    assert embedder.dimension == settings.embedding_dimension, f"Embedder dimension mismatch"
-    reranker = None
-    if settings.reranker_provider == "cohere" and settings.cohere_api_key:
-        reranker = CohereReranker(api_key=settings.cohere_api_key)
-    retriever = Retriever(embedder=embedder, reranker=reranker)
-    set_retriever(retriever)
-    count = await ingest_runbooks(embedder)
-    logger.info(f"Ingested {count} runbook chunks")
-
-    # Initialize reliable messaging infrastructure
-    await redis_store.init_consumer_group()
-
-    # Wrap orchestrator adapter with LLM response cache (requires Redis to be ready)
-    await init_cached_adapters()
-
+    # 8. Background workers
     consumer_task = asyncio.create_task(signal_consumer_worker())
     escalation_task = asyncio.create_task(approval_escalation_worker())
 

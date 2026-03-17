@@ -1,0 +1,4 @@
+notification_channels:
+  default-webhook:
+    type: webhook
+    url: "${NOTIFICATION_WEBHOOK_URL}"
