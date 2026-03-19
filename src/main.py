@@ -76,7 +76,7 @@ def _auto_generate_api_key():
 
     logger.info("=" * 60)
     logger.info("AUTO-GENERATED STOURIO_API_KEY%s:", " (saved to .env)" if persisted else " (in-memory only, set STOURIO_API_KEY in .env to persist)")
-    logger.info("  %s...%s", key[:8], key[-4:])
+    logger.info("  %s", key)
     logger.info("Use this key for admin panel login and API auth.")
     logger.info("=" * 60)
 
