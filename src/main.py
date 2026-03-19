@@ -28,7 +28,7 @@ logger = logging.getLogger("stourio")
 
 
 def _auto_generate_api_key():
-    """Auto-generate STOURIO_API_KEY if not set. Persists to .env file."""
+    """Auto-generate STOURIO_API_KEY if not set. Persists to .env file if possible."""
     import secrets
     import os
 
@@ -36,16 +36,25 @@ def _auto_generate_api_key():
         return
 
     key = secrets.token_urlsafe(32)
-    settings.stourio_api_key = key
 
-    # Persist to .env so it survives restarts
+    # Set in memory (Pydantic v2 model_config may block direct assignment)
+    try:
+        settings.stourio_api_key = key
+    except Exception:
+        # Pydantic frozen model — set via __dict__
+        object.__setattr__(settings, 'stourio_api_key', key)
+
+    # Also set as environment variable so it's available to the process
+    os.environ["STOURIO_API_KEY"] = key
+
+    # Try to persist to .env so it survives restarts
     env_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env")
+    persisted = False
     try:
         if os.path.exists(env_path):
             with open(env_path, "r") as f:
                 content = f.read()
             if "STOURIO_API_KEY=" in content:
-                # Replace empty value
                 lines = content.splitlines()
                 for i, line in enumerate(lines):
                     if line.startswith("STOURIO_API_KEY=") and not line.split("=", 1)[1].strip():
@@ -53,17 +62,20 @@ def _auto_generate_api_key():
                         break
                 with open(env_path, "w") as f:
                     f.write("\n".join(lines) + "\n")
+                persisted = True
             else:
                 with open(env_path, "a") as f:
                     f.write(f"\nSTOURIO_API_KEY={key}\n")
+                persisted = True
         else:
             with open(env_path, "w") as f:
                 f.write(f"STOURIO_API_KEY={key}\n")
+            persisted = True
     except OSError as e:
         logger.warning("Could not persist STOURIO_API_KEY to .env: %s", e)
 
     logger.info("=" * 60)
-    logger.info("AUTO-GENERATED STOURIO_API_KEY (saved to .env):")
+    logger.info("AUTO-GENERATED STOURIO_API_KEY%s:", " (saved to .env)" if persisted else " (in-memory only, set STOURIO_API_KEY in .env to persist)")
     logger.info("  %s...%s", key[:8], key[-4:])
     logger.info("Use this key for admin panel login and API auth.")
     logger.info("=" * 60)

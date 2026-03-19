@@ -22,7 +22,7 @@ class CronStore:
 
     def _compute_next_run(self, schedule: str) -> datetime:
         """Compute the next run time from a cron expression."""
-        now = datetime.now(timezone.utc)
+        now = datetime.utcnow()
         cron = croniter(schedule, now)
         return cron.get_next(datetime)
 
@@ -63,7 +63,7 @@ class CronStore:
 
     async def get_due_jobs(self) -> list[CronJobRecord]:
         """Return active jobs whose next_run_at is in the past."""
-        now = datetime.now(timezone.utc)
+        now = datetime.utcnow()  # Naive UTC to match naive DB column
         result = await self._session.execute(
             select(CronJobRecord)
             .where(CronJobRecord.active == True)
@@ -73,7 +73,7 @@ class CronStore:
 
     async def mark_executed(self, job: CronJobRecord) -> None:
         """Update last_run_at and compute next_run_at."""
-        now = datetime.now(timezone.utc)
+        now = datetime.utcnow()
         job.last_run_at = now
         job.next_run_at = self._compute_next_run(job.schedule)
         await self._session.commit()

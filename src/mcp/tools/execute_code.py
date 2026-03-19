@@ -48,13 +48,12 @@ def _check_docker() -> bool:
         if shutil.which("docker") is None:
             _docker_available = False
         else:
-            # Verify daemon is actually running
+            # Verify daemon is actually running (use inherited env for PATH)
             import subprocess
             try:
                 result = subprocess.run(
                     ["docker", "info"],
                     capture_output=True, timeout=5,
-                    env=_SAFE_ENV,
                 )
                 _docker_available = result.returncode == 0
             except Exception:
@@ -76,7 +75,6 @@ async def _run_in_docker(code: str, language: str, timeout: int) -> dict:
         f"--cpus={cfg['cpus']}",
         "--read-only",
         "--tmpfs", "/tmp:size=64m",
-        "--no-new-privileges",
         "--security-opt=no-new-privileges:true",
         cfg["image"],
     ]
