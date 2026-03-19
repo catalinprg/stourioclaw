@@ -190,6 +190,22 @@ async def execute_agent(
         # Load conversation history
         if conversation_id:
             history = await get_history(conversation_id, limit=settings.conversation_history_limit)
+
+            # Auto-summarize if conversation is getting long
+            if settings.conversation_auto_summarize and len(history) >= settings.conversation_history_limit - 2:
+                from src.persistence.conversations import summarize_and_compact
+                try:
+                    summary = await summarize_and_compact(
+                        conversation_id,
+                        keep_recent=settings.conversation_history_limit // 2,
+                    )
+                    if summary:
+                        # Reload history after compaction
+                        history = await get_history(conversation_id, limit=settings.conversation_history_limit)
+                        logger.info("Conversation %s auto-summarized", conversation_id)
+                except Exception as e:
+                    logger.warning("Auto-summarization failed: %s", e)
+
             if history:
                 history_context = "\n".join(f"[{m.role}]: {m.content}" for m in history)
                 messages.insert(0, ChatMessage(role="user", content=f"Previous conversation context:\n{history_context}"))

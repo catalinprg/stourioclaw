@@ -83,6 +83,7 @@ class Settings(BaseSettings):
     agent_memory_ttl_days: int = 90
     agent_memory_recall_count: int = 3
     conversation_history_limit: int = 20
+    conversation_auto_summarize: bool = True
 
     # --- Plugins ---
     tools_yaml_dir: str = "tools/yaml"
