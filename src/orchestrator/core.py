@@ -11,7 +11,7 @@ from src.guardrails.approvals import create_approval_request, check_kill_switch
 from src.agents.registry import AgentRegistry
 from src.orchestrator.concurrency import get_pool
 from src.persistence import audit
-from src.persistence.database import get_session
+from src.persistence.database import async_session
 from src.telemetry import tracer
 
 logger = logging.getLogger("stourio.orchestrator")
@@ -199,7 +199,7 @@ async def _process_inner(signal: OrchestratorInput, span) -> dict:
     # --- Step 2: LLM routing ---
     adapter = get_orchestrator_adapter()
 
-    async with get_session() as session:
+    async with async_session() as session:
         registry = AgentRegistry(session)
         routable_agents = await registry.list_routable()
 
@@ -297,7 +297,7 @@ async def _process_inner(signal: OrchestratorInput, span) -> dict:
             }
 
         # Check if target agent is a daemon — route to inbox if running
-        async with get_session() as sess:
+        async with async_session() as sess:
             _reg = AgentRegistry(sess)
             _target = await _reg.get_by_name(agent_type)
 

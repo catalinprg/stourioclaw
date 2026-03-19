@@ -16,7 +16,7 @@ class TelegramClient:
     def __init__(self, token: str):
         self.token = token
         self._base_url = f"{TELEGRAM_API_BASE}{token}"
-        self._http = httpx.AsyncClient(timeout=30.0)
+        self._http = httpx.AsyncClient(timeout=60.0)
 
     async def send_message(
         self,
