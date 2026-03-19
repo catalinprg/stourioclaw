@@ -16,17 +16,6 @@ services:
       timeout: 5s
       retries: 5
 
-  jaeger:
-    image: jaegertracing/all-in-one:1.50
-    ports:
-      - "127.0.0.1:16686:16686"  # Web UI, localhost only
-    expose:
-      - "4317"  # OTLP gRPC, internal only
-    environment:
-      - COLLECTOR_OTLP_ENABLED=true
-    volumes:
-      - jaeger_data:/data
-
   redis:
     image: redis:7-alpine
     command: >
@@ -45,7 +34,18 @@ services:
       timeout: 5s
       retries: 5
 
-  stourio:
+  jaeger:
+    image: jaegertracing/all-in-one:1.50
+    ports:
+      - "127.0.0.1:16686:16686"  # Web UI, localhost only
+    expose:
+      - "4317"  # OTLP gRPC, internal only
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    volumes:
+      - jaeger_data:/data
+
+  stourioclaw:
     build: .
     ports:
       - "8000:8000"
@@ -54,6 +54,7 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://stourio:${POSTGRES_PASSWORD:-changeme}@postgres:5432/stourio
       REDIS_URL: redis://:${REDIS_PASSWORD:-changeme}@redis:6379/0
+      WORKSPACE_DIR: /app/workspace
     depends_on:
       postgres:
         condition: service_healthy
@@ -61,6 +62,7 @@ services:
         condition: service_healthy
     volumes:
       - .:/app
+      - ./workspace:/app/workspace
     restart: unless-stopped
 
 volumes:
