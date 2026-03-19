@@ -61,11 +61,17 @@ def test_register_invalid_name_raises():
         registry.register(tool)
 
 
-def test_get_unknown_tool_raises():
-    """get() on missing tool must raise ValueError."""
+def test_get_unknown_tool_returns_none():
+    """get() on missing tool returns None."""
+    registry = ToolRegistry()
+    assert registry.get("missing") is None
+
+
+def test_get_strict_unknown_tool_raises():
+    """get_strict() on missing tool must raise ValueError."""
     registry = ToolRegistry()
     with pytest.raises(ValueError, match="not registered"):
-        registry.get("missing")
+        registry.get_strict("missing")
 
 
 def test_to_tool_definitions():

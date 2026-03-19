@@ -44,7 +44,11 @@ class ToolRegistry:
     def has(self, name: str) -> bool:
         return name in self._tools
 
-    def get(self, name: str) -> Tool:
+    def get(self, name: str) -> Tool | None:
+        """Return the tool by name, or None if not found."""
+        return self._tools.get(name)
+
+    def get_strict(self, name: str) -> Tool:
         """Return the tool or raise ValueError."""
         if name not in self._tools:
             raise ValueError(f"Tool '{name}' is not registered.")
@@ -65,7 +69,7 @@ class ToolRegistry:
         If a security interceptor is wired, checks the call first.
         Intercepted calls require human approval via Telegram before proceeding.
         """
-        tool = self.get(name)  # raises ValueError if missing
+        tool = self.get_strict(name)  # raises ValueError if missing
 
         if tool.execute_fn is None:
             raise ValueError(f"Tool '{name}' has no execute_fn defined.")
@@ -235,3 +239,42 @@ def register_tool(
 # ------------------------------------------------------------------
 
 tool_registry = ToolRegistry()
+
+
+# ------------------------------------------------------------------
+# Legacy plugin compatibility layer
+# ------------------------------------------------------------------
+
+
+def get_registry() -> ToolRegistry:
+    """Return the global ToolRegistry singleton (replaces src.plugins.registry.get_registry)."""
+    return tool_registry
+
+
+def init_registry() -> ToolRegistry:
+    """Load YAML/Python tools from disk and register them as MCP tools.
+
+    Replaces the old src.plugins.registry.init_registry().
+    """
+    from src.config import settings
+    from src.mcp.legacy.loader import load_yaml_tools, load_python_tools
+
+    yaml_tools = load_yaml_tools(settings.tools_yaml_dir)
+    python_tools = load_python_tools(settings.tools_python_dir)
+
+    for bt in yaml_tools + python_tools:
+        tool = Tool(
+            name=bt.name,
+            description=bt.description,
+            parameters=bt.parameters,
+            execute_fn=bt.execute,
+        )
+        tool_registry.register(tool)
+
+    logger.info(
+        "Legacy tool loader: %d tools loaded (%d YAML, %d Python).",
+        len(yaml_tools) + len(python_tools),
+        len(yaml_tools),
+        len(python_tools),
+    )
+    return tool_registry

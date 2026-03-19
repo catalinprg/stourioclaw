@@ -153,7 +153,7 @@ def test_register_all_tools():
         "execute_code",
         "query_data",
         "search_knowledge",
-        "query_audit_log",
+        "read_audit_log",
         "call_api",
         "send_notification",
         "generate_report",

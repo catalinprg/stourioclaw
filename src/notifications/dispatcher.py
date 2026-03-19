@@ -68,9 +68,6 @@ class NotificationDispatcher:
     def from_config(cls, config_path: str) -> "NotificationDispatcher":
         import yaml
         from src.notifications.webhook import WebhookNotifier
-        from src.notifications.adapters.slack import SlackNotifier
-        from src.notifications.adapters.pagerduty import PagerDutyNotifier
-        from src.notifications.adapters.email import EmailNotifier
 
         with open(config_path) as f:
             raw = yaml.safe_load(f)
@@ -81,34 +78,18 @@ class NotificationDispatcher:
             cfg = _resolve_dict(cfg)
             notifier_type = cfg.get("type", "webhook")
 
-            if notifier_type == "slack":
-                notifier = SlackNotifier(
-                    name=channel_name,
-                    webhook_url=cfg["webhook_url"],
-                    default_channel=cfg.get("default_channel", ""),
-                )
-            elif notifier_type == "pagerduty":
-                notifier = PagerDutyNotifier(
-                    name=channel_name,
-                    api_key=cfg["api_key"],
-                    service_id=cfg["service_id"],
-                )
-            elif notifier_type == "email":
-                notifier = EmailNotifier(
-                    name=channel_name,
-                    api_key=cfg["api_key"],
-                    from_email=cfg["from_email"],
-                    to_email=cfg["to_email"],
-                )
-            else:
-                # Default: webhook
+            if notifier_type == "webhook":
                 notifier = WebhookNotifier(
                     name=channel_name,
                     url=cfg["url"],
                     headers=cfg.get("headers"),
                 )
-
-            dispatcher.register_channel(channel_name, notifier)
+                dispatcher.register_channel(channel_name, notifier)
+            else:
+                logger.warning(
+                    "Unsupported notifier type '%s' for channel '%s'; skipping.",
+                    notifier_type, channel_name,
+                )
 
         return dispatcher
 

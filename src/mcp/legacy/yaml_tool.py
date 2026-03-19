@@ -23,7 +23,7 @@ import logging
 import httpx
 from jinja2 import Environment, BaseLoader, StrictUndefined
 
-from src.plugins.base import BaseTool
+from src.mcp.legacy.base import BaseTool
 
 logger = logging.getLogger("stourio.plugins.yaml_tool")
 

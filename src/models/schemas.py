@@ -105,9 +105,7 @@ class OrchestratorResponse(BaseModel):
 class RuleAction(str, Enum):
     REQUIRE_APPROVAL = "require_approval"
     HARD_REJECT = "hard_reject"
-    TRIGGER_AUTOMATION = "trigger_automation"
     FORCE_AGENT = "force_agent"
-    FORCE_CHAIN = "force_chain"
     ALLOW = "allow"
 
 

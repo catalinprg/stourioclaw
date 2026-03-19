@@ -8,11 +8,10 @@ from src.api.routes import router
 from src.api.rate_limit import RateLimitMiddleware
 from src.persistence.database import init_db, async_session
 from src.rules.engine import seed_default_rules
-from src.plugins.registry import init_registry
+from src.mcp.registry import init_registry
 from src.config import settings
 from src.persistence import redis_store
 from src.orchestrator import core as orchestrator_module
-from src.orchestrator.chains import load_chains
 from src.models.schemas import OrchestratorInput, SignalSource, WebhookSignal
 from src.telemetry import setup_tracing
 
@@ -169,10 +168,7 @@ async def lifespan(app: FastAPI):
     retriever = Retriever(embedder=embedder, reranker=reranker)
     set_retriever(retriever)
 
-    # 6. Chain definitions
-    load_chains(settings.chains_config_path)
-
-    # 7. Wire placeholder tools
+    # 6. Wire placeholder tools
     from src.mcp.tools.audit import set_session_factory
     from src.mcp.tools.notification import set_telegram_client
     set_session_factory(async_session)

@@ -6,7 +6,7 @@ import re
 from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 from src.config import settings
-from src.plugins.registry import get_registry
+from src.mcp.registry import get_registry
 from src.models.schemas import (
     AgentTemplate, AgentExecution, ExecutionStatus, ChatMessage, ToolDefinition, new_id,
 )
@@ -45,11 +45,10 @@ def _resolve_tools(agent: AgentModel) -> list[ToolDefinition]:
     for tool_name in (agent.tools or []):
         tool = registry.get(tool_name)
         if tool:
-            td = tool.to_tool_definition()
             tool_defs.append(ToolDefinition(
-                name=td["name"],
-                description=td["description"],
-                parameters=td["parameters"],
+                name=tool.name,
+                description=tool.description,
+                parameters=tool.parameters,
             ))
         else:
             logger.warning("Tool '%s' referenced by agent '%s' not found in registry", tool_name, agent.name)

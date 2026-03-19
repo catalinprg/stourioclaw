@@ -1,4 +1,4 @@
-from src.plugins.base import BaseTool
+from src.mcp.legacy.base import BaseTool
 
 _retriever = None
 

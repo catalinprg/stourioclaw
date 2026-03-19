@@ -9,8 +9,8 @@ import os
 
 import yaml
 
-from src.plugins.base import BaseTool
-from src.plugins.yaml_tool import YamlTool
+from src.mcp.legacy.base import BaseTool
+from src.mcp.legacy.yaml_tool import YamlTool
 
 logger = logging.getLogger("stourio.plugins.loader")
 

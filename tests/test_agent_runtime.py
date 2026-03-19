@@ -230,11 +230,9 @@ def test_resolve_tools_from_plugin_registry():
     agent = _make_agent(tools=["get_system_metrics", "nonexistent_tool"])
 
     mock_tool = MagicMock()
-    mock_tool.to_tool_definition.return_value = {
-        "name": "get_system_metrics",
-        "description": "Get system metrics",
-        "parameters": {"type": "object", "properties": {}},
-    }
+    mock_tool.name = "get_system_metrics"
+    mock_tool.description = "Get system metrics"
+    mock_tool.parameters = {"type": "object", "properties": {}}
 
     mock_registry = MagicMock()
     mock_registry.get.side_effect = lambda name: mock_tool if name == "get_system_metrics" else None

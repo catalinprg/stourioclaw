@@ -84,9 +84,6 @@ class Settings(BaseSettings):
     tools_yaml_dir: str = "tools/yaml"
     tools_python_dir: str = "tools/python"
 
-    # --- Chains ---
-    chains_config_path: str = "config/chains.yaml"
-
     # --- Agent concurrency & templates ---
     agent_templates_dir: str = "config/agents"
     agent_concurrency_default: int = 3

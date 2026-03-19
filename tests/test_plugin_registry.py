@@ -1,8 +1,8 @@
 import pytest
-from unittest.mock import AsyncMock
-from src.plugins.registry import ToolRegistry
-from src.plugins.base import BaseTool
-from src.plugins.yaml_tool import YamlTool
+from src.mcp.registry import ToolRegistry
+from src.mcp.base import Tool
+from src.mcp.legacy.base import BaseTool
+from src.mcp.legacy.yaml_tool import YamlTool
 
 
 class DummyTool(BaseTool):
@@ -17,7 +17,7 @@ class DummyTool(BaseTool):
 
 def test_registry_register_and_get():
     registry = ToolRegistry()
-    tool = DummyTool()
+    tool = Tool(name="dummy_tool", description="A test tool", parameters={}, execute_fn=DummyTool().execute)
     registry.register(tool)
     retrieved = registry.get("dummy_tool")
     assert retrieved is tool
@@ -26,7 +26,7 @@ def test_registry_register_and_get():
 @pytest.mark.asyncio
 async def test_registry_execute():
     registry = ToolRegistry()
-    tool = DummyTool()
+    tool = Tool(name="dummy_tool", description="A test tool", parameters={}, execute_fn=DummyTool().execute)
     registry.register(tool)
     result = await registry.execute("dummy_tool", {})
     assert result == {"result": "dummy_output"}
@@ -41,13 +41,11 @@ async def test_registry_execute_unknown_tool():
 
 def test_registry_list_tools():
     registry = ToolRegistry()
-    tool = DummyTool()
+    tool = Tool(name="dummy_tool", description="A test tool", parameters={})
     registry.register(tool)
     definitions = registry.list_tools()
     assert len(definitions) == 1
-    assert definitions[0]["name"] == "dummy_tool"
-    assert "description" in definitions[0]
-    assert "parameters" in definitions[0]
+    assert definitions[0].name == "dummy_tool"
 
 
 def test_yaml_tool_parsing():

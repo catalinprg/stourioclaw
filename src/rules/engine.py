@@ -181,15 +181,6 @@ async def seed_default_rules():
             action=RuleAction.HARD_REJECT,
             risk_level=RiskLevel.CRITICAL,
         ),
-        Rule(
-            id=new_id(),
-            name="auto_scale_cpu",
-            pattern=r"CPU\s*>\s*9[0-9]%",
-            pattern_type="regex",
-            action=RuleAction.TRIGGER_AUTOMATION,
-            risk_level=RiskLevel.LOW,
-            automation_id="auto_scale_horizontal",
-        ),
     ]
 
     for rule in defaults:
