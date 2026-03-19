@@ -39,9 +39,14 @@ def list_templates() -> list[AgentTemplate]:
 
 
 def _resolve_tools(agent: AgentModel) -> list[ToolDefinition]:
-    """Resolve tool name strings from DB agent into ToolDefinition objects."""
+    """Resolve tool name strings from DB agent into ToolDefinition objects.
+
+    Returns union of local tools (agent.tools) and remote MCP tools (agent.mcp_servers).
+    """
     registry = get_registry()
     tool_defs = []
+
+    # Local tools
     for tool_name in (agent.tools or []):
         tool = registry.get(tool_name)
         if tool:
@@ -52,6 +57,15 @@ def _resolve_tools(agent: AgentModel) -> list[ToolDefinition]:
             ))
         else:
             logger.warning("Tool '%s' referenced by agent '%s' not found in registry", tool_name, agent.name)
+
+    # MCP server tools
+    mcp_server_names = getattr(agent, 'mcp_servers', None) or []
+    if mcp_server_names:
+        from src.mcp.client import get_mcp_client_pool
+        pool = get_mcp_client_pool()
+        mcp_tools = pool.get_all_tools_for_agent(mcp_server_names)
+        tool_defs.extend(mcp_tools)
+
     return tool_defs
 
 
@@ -76,8 +90,26 @@ async def default_tool_executor(tool_name: str, arguments: dict, agent_name: str
     try:
         result = await registry.execute(tool_name, arguments, agent_name=agent_name)
         return json.dumps(result) if isinstance(result, dict) else str(result)
-    except ValueError as e:
-        return json.dumps({"error": str(e)})
+    except ValueError:
+        # Tool not in local registry — check MCP client pool
+        if "__" in tool_name:
+            server_name, remote_tool_name = tool_name.split("__", 1)
+            from src.mcp.client import get_mcp_client_pool
+            pool = get_mcp_client_pool()
+            if pool.is_connected(server_name):
+                # Use registry's wired interceptor for security (errata E5)
+                interceptor = registry._interceptor
+                if interceptor is not None:
+                    check = await interceptor.check_tool_call(tool_name, arguments, agent_name)
+                    if check.intercepted:
+                        # Route through registry's approval workflow
+                        return json.dumps(await registry._handle_intercepted(
+                            tool_name, arguments, agent_name, check
+                        ))
+
+                result = await pool.execute_tool(server_name, remote_tool_name, arguments)
+                return json.dumps(result)
+        return json.dumps({"error": f"Tool '{tool_name}' not found in local registry or MCP servers"})
     except Exception as e:
         logger.error(f"Tool execution failed: {tool_name}: {e}")
         return json.dumps({"error": f"Tool execution failed: {str(e)}"})

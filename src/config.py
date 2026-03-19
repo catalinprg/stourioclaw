@@ -102,6 +102,10 @@ class Settings(BaseSettings):
     browser_timeout_ms: int = 30000
     browser_allowed_domains: list[str] = []
 
+    # MCP client
+    mcp_client_timeout: int = 30
+    mcp_stdio_allowed_commands: list[str] = []
+
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
 
