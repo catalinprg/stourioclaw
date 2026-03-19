@@ -1,0 +1,926 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stourio Admin</title>
+
+    <link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@400;600&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        stourio: {
+                            bg: '#f4f1e8',
+                            primary: '#1a1a1a',
+                            secondary: '#6b6b6b',
+                            accent: '#2e2e2e',
+                            border: '#d8d4c8',
+                            red: '#8b0000',
+                            green: '#2d5a27',
+                            orange: '#c65d00',
+                            yellow: '#b8860b'
+                        }
+                    },
+                    fontFamily: {
+                        serif: ['Crimson Pro', 'serif'],
+                        sans: ['DM Sans', 'sans-serif']
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { background-color: #f4f1e8; color: #1a1a1a; font-family: 'DM Sans', sans-serif; }
+        h1, h2, h3, h4, h5, h6 { font-family: 'Crimson Pro', serif; }
+        .card { background: white; border: 1px solid #d8d4c8; border-radius: 4px; padding: 1.5rem; }
+        .input-field { width: 100%; border: 1px solid #d8d4c8; padding: 0.5rem; border-radius: 4px; background: white; margin-bottom: 1rem; }
+        .btn { padding: 0.5rem 1rem; border-radius: 4px; font-weight: 500; cursor: pointer; transition: all 0.2s; }
+        .btn-primary { background: #2e2e2e; color: white; border: 1px solid #2e2e2e; }
+        .btn-danger { background: #8b0000; color: white; border: 1px solid #8b0000; }
+        .btn-outline { background: transparent; color: #2e2e2e; border: 1px solid #2e2e2e; }
+        .btn-sm { padding: 0.25rem 0.5rem; font-size: 0.75rem; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        table { width: 100%; text-align: left; border-collapse: collapse; }
+        th, td { padding: 0.75rem; border-bottom: 1px solid #d8d4c8; }
+        th { font-family: 'Crimson Pro', serif; font-weight: 600; color: #6b6b6b; }
+        textarea.input-field { min-height: 100px; resize: vertical; }
+        .badge { display: inline-block; padding: 0.125rem 0.5rem; border-radius: 9999px; font-size: 0.7rem; font-weight: 600; text-transform: uppercase; }
+        .badge-low { background: #d1fae5; color: #065f46; }
+        .badge-medium { background: #fef3c7; color: #92400e; }
+        .badge-high { background: #fed7aa; color: #9a3412; }
+        .badge-critical { background: #fecaca; color: #991b1b; }
+        .toggle { position: relative; display: inline-block; width: 36px; height: 20px; }
+        .toggle input { opacity: 0; width: 0; height: 0; }
+        .toggle-slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #d8d4c8; border-radius: 20px; transition: 0.2s; }
+        .toggle-slider:before { content: ""; position: absolute; height: 14px; width: 14px; left: 3px; bottom: 3px; background-color: white; border-radius: 50%; transition: 0.2s; }
+        .toggle input:checked + .toggle-slider { background-color: #2d5a27; }
+        .toggle input:checked + .toggle-slider:before { transform: translateX(16px); }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        function App() {
+            const [apiKey, setApiKey] = useState(sessionStorage.getItem('stourio_key') || '');
+            const [view, setView] = useState('console');
+            const [status, setStatus] = useState(null);
+
+            // Core API fetch wrapper
+            const api = async (endpoint, method = 'GET', body = null) => {
+                const headers = { 'X-STOURIO-KEY': apiKey };
+                if (body) headers['Content-Type'] = 'application/json';
+                const res = await fetch(endpoint, { method, headers, body: body ? JSON.stringify(body) : null });
+                if (res.status === 401 || res.status === 403) {
+                    setApiKey(''); sessionStorage.removeItem('stourio_key');
+                    alert('Invalid or missing API Key.'); throw new Error('Auth failed');
+                }
+                if (!res.ok && res.status !== 202) throw new Error(await res.text());
+                return res.json();
+            };
+
+            // Status Polling
+            useEffect(() => {
+                if (!apiKey) return;
+                const fetchStatus = () => api('/api/status').then(setStatus).catch(console.error);
+                fetchStatus();
+                const interval = setInterval(fetchStatus, 5000);
+                return () => clearInterval(interval);
+            }, [apiKey]);
+
+            const toggleKillSwitch = async () => {
+                const endpoint = status?.kill_switch ? '/api/resume' : '/api/kill';
+                await api(endpoint, 'POST');
+                api('/api/status').then(setStatus);
+            };
+
+            if (!apiKey) {
+                return (
+                    <div className="min-h-screen flex items-center justify-center">
+                        <div className="card w-96 max-w-full">
+                            <h2 className="text-2xl mb-2">Stourio Authentication</h2>
+                            <p className="text-stourio-secondary mb-4 text-sm">Enter your X-STOURIO-KEY to access the command panel.</p>
+                            <input type="password" id="keyInput" className="input-field" placeholder="API Key" />
+                            <button className="btn btn-primary w-full" onClick={() => {
+                                const val = document.getElementById('keyInput').value;
+                                setApiKey(val); sessionStorage.setItem('stourio_key', val);
+                            }}>Authenticate</button>
+                        </div>
+                    </div>
+                );
+            }
+
+            const navItems = [
+                { key: 'console', label: 'Console' },
+                { key: 'agents', label: 'Agents' },
+                { key: 'security', label: 'Security' },
+                { key: 'telegram', label: 'Telegram' },
+                { key: 'rules', label: 'Rules' },
+                { key: 'audit', label: 'Audit' },
+                { key: 'cost', label: 'Costs' },
+                { key: 'deployment', label: 'Deployment' },
+            ];
+
+            return (
+                <div className="max-w-[1200px] mx-auto p-6">
+                    {/* Header */}
+                    <div className="flex justify-between items-end border-b border-stourio-border pb-4 mb-6">
+                        <div>
+                            <h1 className="text-4xl font-semibold text-stourio-primary tracking-tight">Stourio</h1>
+                            <div className="flex gap-4 mt-4 text-sm font-medium text-stourio-secondary items-center flex-wrap">
+                                {navItems.map(item => (
+                                    <button key={item.key} onClick={() => setView(item.key)} className={view === item.key ? 'text-stourio-primary underline underline-offset-4' : ''}>{item.label}</button>
+                                ))}
+
+                                {/* Divider */}
+                                <div className="w-px h-4 bg-stourio-border mx-2"></div>
+
+                                {/* External Links */}
+                                <a href="/docs" target="_blank" rel="noopener noreferrer" className="hover:text-stourio-primary flex items-center gap-1" title="Swagger UI">
+                                    API Docs <span className="text-xs font-serif">&#8599;</span>
+                                </a>
+                                <a href="http://localhost:16686" target="_blank" rel="noopener noreferrer" className="hover:text-stourio-primary flex items-center gap-1" title="OpenTelemetry Traces">
+                                    Tracing <span className="text-xs font-serif">&#8599;</span>
+                                </a>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-4">
+                            {status && (
+                                <div className="text-sm font-medium">
+                                    Status: <span className={status.kill_switch ? 'text-stourio-red' : 'text-stourio-green'}>
+                                        {status.status.toUpperCase()}
+                                    </span>
+                                </div>
+                            )}
+                            <button
+                                onClick={toggleKillSwitch}
+                                className={`btn ${status?.kill_switch ? 'btn-outline border-stourio-red text-stourio-red' : 'btn-danger'}`}>
+                                {status?.kill_switch ? 'RESUME OPERATIONS' : 'HALT SYSTEM'}
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Views */}
+                    {view === 'console' && <ConsoleView api={api} />}
+                    {view === 'agents' && <AgentManager api={api} />}
+                    {view === 'security' && <SecurityFeed api={api} />}
+                    {view === 'telegram' && <TelegramViewer api={api} />}
+                    {view === 'rules' && <RulesView api={api} />}
+                    {view === 'audit' && <AuditView api={api} />}
+                    {view === 'cost' && <CostView api={api} />}
+                    {view === 'deployment' && <DeploymentManager api={api} status={status} />}
+                </div>
+            );
+        }
+
+        // --- Console View (System Status + Approvals) ---
+        function ConsoleView({ api }) {
+            const [approvals, setApprovals] = useState([]);
+            const [systemStatus, setSystemStatus] = useState(null);
+
+            useEffect(() => {
+                const fetchApprovals = () => api('/api/approvals').then(setApprovals).catch(console.error);
+                const fetchStatus = () => api('/api/status').then(setSystemStatus).catch(console.error);
+                fetchApprovals();
+                fetchStatus();
+                const interval = setInterval(() => { fetchApprovals(); fetchStatus(); }, 5000);
+                return () => clearInterval(interval);
+            }, []);
+
+            const handleApproval = async (id, approved) => {
+                await api(`/api/approvals/${id}`, 'POST', { approved, note: 'Action via UI' });
+                api('/api/approvals').then(setApprovals);
+            };
+
+            return (
+                <div className="grid grid-cols-3 gap-6">
+                    {/* System Status */}
+                    <div className="col-span-2">
+                        <div className="card mb-6">
+                            <h3 className="text-xl mb-4">System Status</h3>
+                            {systemStatus ? (
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                    <div>
+                                        <p className="text-xs text-stourio-secondary mb-1">Status</p>
+                                        <p className={`text-lg font-serif font-semibold ${systemStatus.kill_switch ? 'text-stourio-red' : 'text-stourio-green'}`}>{systemStatus.status?.toUpperCase()}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-xs text-stourio-secondary mb-1">Uptime</p>
+                                        <p className="text-lg font-serif font-semibold">{systemStatus.uptime || '--'}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-xs text-stourio-secondary mb-1">Active Agents</p>
+                                        <p className="text-lg font-serif font-semibold">{systemStatus.pool ? Object.keys(systemStatus.pool).length : 0}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-xs text-stourio-secondary mb-1">Kill Switch</p>
+                                        <p className={`text-lg font-serif font-semibold ${systemStatus.kill_switch ? 'text-stourio-red' : 'text-stourio-green'}`}>{systemStatus.kill_switch ? 'ENGAGED' : 'OFF'}</p>
+                                    </div>
+                                </div>
+                            ) : <p className="text-sm text-stourio-secondary">Loading...</p>}
+                        </div>
+                    </div>
+
+                    {/* Approvals Column */}
+                    <div className="flex flex-col h-[70vh] overflow-y-auto">
+                        <h3 className="text-xl mb-4 border-b border-stourio-border pb-2">Pending Approvals</h3>
+                        {approvals.length === 0 && <p className="text-sm text-stourio-secondary">No pending actions.</p>}
+                        {approvals.map(app => (
+                            <div key={app.id} className="card mb-4 border-l-4 border-l-stourio-red">
+                                <div className="flex justify-between items-start mb-2">
+                                    <span className="text-xs font-bold bg-stourio-red/10 text-stourio-red px-2 py-1 rounded">RISK: {app.risk_level.toUpperCase()}</span>
+                                    <span className="text-xs text-stourio-secondary">Expires: {new Date(app.expires_at).toLocaleTimeString()}</span>
+                                </div>
+                                <p className="text-sm font-medium mb-2">{app.action_description}</p>
+                                <p className="text-xs text-stourio-secondary mb-4 bg-stourio-bg p-2 rounded font-mono break-all">{app.blast_radius}</p>
+                                <div className="flex gap-2">
+                                    <button onClick={() => handleApproval(app.id, true)} className="btn btn-primary text-sm flex-1">Authorize</button>
+                                    <button onClick={() => handleApproval(app.id, false)} className="btn btn-outline border-stourio-border text-sm flex-1">Reject</button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            );
+        }
+
+        // --- Agent Manager ---
+        function AgentManager({ api }) {
+            const [agents, setAgents] = useState([]);
+            const [showForm, setShowForm] = useState(false);
+            const [editAgent, setEditAgent] = useState(null);
+            const [form, setForm] = useState({ name: '', display_name: '', description: '', system_prompt: '', model: '', tools: [], max_steps: 15, max_concurrent: 3 });
+            const [toolInput, setToolInput] = useState('');
+            const [confirmDelete, setConfirmDelete] = useState(null);
+
+            const fetchAgents = () => api('/api/agents').then(data => setAgents(Array.isArray(data) ? data : (data.agents || []))).catch(console.error);
+            useEffect(() => { fetchAgents(); }, []);
+
+            const resetForm = () => {
+                setForm({ name: '', display_name: '', description: '', system_prompt: '', model: '', tools: [], max_steps: 15, max_concurrent: 3 });
+                setToolInput('');
+                setShowForm(false);
+                setEditAgent(null);
+            };
+
+            const handleSubmit = async (e) => {
+                e.preventDefault();
+                const payload = { ...form, max_steps: Number(form.max_steps), max_concurrent: Number(form.max_concurrent) };
+                if (editAgent) {
+                    await api(`/api/agents/${editAgent}`, 'PUT', payload);
+                } else {
+                    await api('/api/agents', 'POST', payload);
+                }
+                resetForm();
+                fetchAgents();
+            };
+
+            const startEdit = (agent) => {
+                setForm({
+                    name: agent.name || '',
+                    display_name: agent.display_name || '',
+                    description: agent.description || '',
+                    system_prompt: agent.system_prompt || '',
+                    model: agent.model || '',
+                    tools: agent.tools || [],
+                    max_steps: agent.max_steps || 15,
+                    max_concurrent: agent.max_concurrent || 3,
+                });
+                setEditAgent(agent.name);
+                setShowForm(true);
+            };
+
+            const cloneAgent = (agent) => {
+                setForm({
+                    name: agent.name + '_copy',
+                    display_name: (agent.display_name || '') + ' (Copy)',
+                    description: agent.description || '',
+                    system_prompt: agent.system_prompt || '',
+                    model: agent.model || '',
+                    tools: agent.tools || [],
+                    max_steps: agent.max_steps || 15,
+                    max_concurrent: agent.max_concurrent || 3,
+                });
+                setEditAgent(null);
+                setShowForm(true);
+            };
+
+            const deleteAgent = async (name) => {
+                await api(`/api/agents/${name}`, 'DELETE');
+                setConfirmDelete(null);
+                fetchAgents();
+            };
+
+            const addTool = () => {
+                if (toolInput.trim() && !form.tools.includes(toolInput.trim())) {
+                    setForm({ ...form, tools: [...form.tools, toolInput.trim()] });
+                    setToolInput('');
+                }
+            };
+
+            const removeTool = (t) => setForm({ ...form, tools: form.tools.filter(x => x !== t) });
+
+            return (
+                <div>
+                    <div className="flex justify-between items-center mb-6">
+                        <h3 className="text-xl">Agent Manager</h3>
+                        <button onClick={() => { resetForm(); setShowForm(!showForm); }} className="btn btn-primary text-sm">
+                            {showForm ? 'Cancel' : 'Create Agent'}
+                        </button>
+                    </div>
+
+                    {/* Create/Edit Form */}
+                    {showForm && (
+                        <div className="card mb-6">
+                            <h4 className="text-lg mb-4">{editAgent ? `Edit: ${editAgent}` : 'New Agent'}</h4>
+                            <form onSubmit={handleSubmit}>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="text-xs text-stourio-secondary">Name (slug)</label>
+                                        <input className="input-field text-sm" value={form.name} onChange={e => setForm({...form, name: e.target.value})} required disabled={!!editAgent} />
+                                    </div>
+                                    <div>
+                                        <label className="text-xs text-stourio-secondary">Display Name</label>
+                                        <input className="input-field text-sm" value={form.display_name} onChange={e => setForm({...form, display_name: e.target.value})} />
+                                    </div>
+                                    <div>
+                                        <label className="text-xs text-stourio-secondary">Model</label>
+                                        <input className="input-field text-sm font-mono" value={form.model} onChange={e => setForm({...form, model: e.target.value})} placeholder="claude-sonnet-4-20250514" />
+                                    </div>
+                                    <div>
+                                        <label className="text-xs text-stourio-secondary">Description</label>
+                                        <input className="input-field text-sm" value={form.description} onChange={e => setForm({...form, description: e.target.value})} />
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="text-xs text-stourio-secondary">System Prompt</label>
+                                    <textarea className="input-field text-sm font-mono" value={form.system_prompt} onChange={e => setForm({...form, system_prompt: e.target.value})} />
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="text-xs text-stourio-secondary">Max Steps</label>
+                                        <input type="number" className="input-field text-sm" value={form.max_steps} onChange={e => setForm({...form, max_steps: e.target.value})} />
+                                    </div>
+                                    <div>
+                                        <label className="text-xs text-stourio-secondary">Max Concurrent</label>
+                                        <input type="number" className="input-field text-sm" value={form.max_concurrent} onChange={e => setForm({...form, max_concurrent: e.target.value})} />
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="text-xs text-stourio-secondary">Tools</label>
+                                    <div className="flex gap-2 mb-2">
+                                        <input className="input-field text-sm mb-0 flex-1" value={toolInput} onChange={e => setToolInput(e.target.value)} placeholder="Tool name" onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addTool(); }}} />
+                                        <button type="button" onClick={addTool} className="btn btn-outline btn-sm">Add</button>
+                                    </div>
+                                    <div className="flex flex-wrap gap-1 mb-4">
+                                        {form.tools.map(t => (
+                                            <span key={t} className="bg-stourio-bg px-2 py-1 rounded text-xs flex items-center gap-1">
+                                                {t} <button type="button" onClick={() => removeTool(t)} className="text-stourio-red font-bold">&times;</button>
+                                            </span>
+                                        ))}
+                                    </div>
+                                </div>
+                                <button type="submit" className="btn btn-primary">{editAgent ? 'Update Agent' : 'Create Agent'}</button>
+                            </form>
+                        </div>
+                    )}
+
+                    {/* Agent Table */}
+                    <div className="card overflow-x-auto">
+                        <table className="text-sm">
+                            <thead><tr><th>Name</th><th>Model</th><th>Status</th><th>Tools</th><th>Actions</th></tr></thead>
+                            <tbody>
+                                {agents.map(a => (
+                                    <tr key={a.name}>
+                                        <td>
+                                            <span className="font-medium">{a.display_name || a.name}</span>
+                                            {a.display_name && <span className="block text-xs text-stourio-secondary font-mono">{a.name}</span>}
+                                        </td>
+                                        <td className="font-mono text-xs">{a.model || '--'}</td>
+                                        <td>
+                                            <span className={`badge ${a.active !== false ? 'badge-low' : 'badge-medium'}`}>
+                                                {a.active !== false ? 'active' : 'inactive'}
+                                            </span>
+                                        </td>
+                                        <td className="text-xs">{(a.tools || []).length > 0 ? a.tools.slice(0, 3).join(', ') + (a.tools.length > 3 ? ` +${a.tools.length - 3}` : '') : '--'}</td>
+                                        <td className="whitespace-nowrap">
+                                            <button onClick={() => startEdit(a)} className="text-xs underline mr-2">Edit</button>
+                                            <button onClick={() => cloneAgent(a)} className="text-xs underline mr-2">Clone</button>
+                                            {a.is_system ? (
+                                                <span className="text-xs text-stourio-secondary" title="System agents cannot be deleted">Del</span>
+                                            ) : confirmDelete === a.name ? (
+                                                <span className="text-xs">
+                                                    <button onClick={() => deleteAgent(a.name)} className="text-stourio-red underline mr-1">Confirm</button>
+                                                    <button onClick={() => setConfirmDelete(null)} className="underline">Cancel</button>
+                                                </span>
+                                            ) : (
+                                                <button onClick={() => setConfirmDelete(a.name)} className="text-stourio-red text-xs underline">Del</button>
+                                            )}
+                                        </td>
+                                    </tr>
+                                ))}
+                                {agents.length === 0 && <tr><td colSpan="5" className="text-stourio-secondary text-center">No agents found.</td></tr>}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            );
+        }
+
+        // --- Security Feed ---
+        function SecurityFeed({ api }) {
+            const [alerts, setAlerts] = useState([]);
+            const [filterSeverity, setFilterSeverity] = useState('all');
+            const [filterStatus, setFilterStatus] = useState('all');
+            const [expanded, setExpanded] = useState(null);
+
+            const fetchAlerts = () => api('/api/security/alerts').then(data => setAlerts(Array.isArray(data) ? data : (data.alerts || []))).catch(console.error);
+            useEffect(() => { fetchAlerts(); const interval = setInterval(fetchAlerts, 10000); return () => clearInterval(interval); }, []);
+
+            const updateAlert = async (id, action) => {
+                await api(`/api/security/alerts/${id}`, 'POST', { action });
+                fetchAlerts();
+            };
+
+            const severityBadge = (sev) => {
+                const s = (sev || 'low').toLowerCase();
+                return `badge badge-${s}`;
+            };
+
+            const filtered = alerts.filter(a => {
+                if (filterSeverity !== 'all' && (a.severity || '').toLowerCase() !== filterSeverity) return false;
+                if (filterStatus !== 'all' && (a.status || '').toLowerCase() !== filterStatus) return false;
+                return true;
+            });
+
+            return (
+                <div>
+                    <h3 className="text-xl mb-4">Security Feed</h3>
+                    <div className="flex gap-4 mb-6 items-center">
+                        <div>
+                            <label className="text-xs text-stourio-secondary mr-2">Severity:</label>
+                            <select className="input-field text-sm mb-0 w-auto inline-block" value={filterSeverity} onChange={e => setFilterSeverity(e.target.value)}>
+                                <option value="all">All</option>
+                                <option value="low">Low</option>
+                                <option value="medium">Medium</option>
+                                <option value="high">High</option>
+                                <option value="critical">Critical</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label className="text-xs text-stourio-secondary mr-2">Status:</label>
+                            <select className="input-field text-sm mb-0 w-auto inline-block" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
+                                <option value="all">All</option>
+                                <option value="open">Open</option>
+                                <option value="acknowledged">Acknowledged</option>
+                                <option value="resolved">Resolved</option>
+                                <option value="false_positive">False Positive</option>
+                            </select>
+                        </div>
+                        <span className="text-xs text-stourio-secondary">{filtered.length} alert{filtered.length !== 1 ? 's' : ''}</span>
+                    </div>
+
+                    <div className="space-y-3">
+                        {filtered.map(alert => (
+                            <div key={alert.id} className="card">
+                                <div className="flex justify-between items-start">
+                                    <div className="flex items-center gap-3">
+                                        <span className={severityBadge(alert.severity)}>{alert.severity}</span>
+                                        <span className="font-medium text-sm">{alert.title || alert.alert_type || 'Alert'}</span>
+                                        <span className="text-xs text-stourio-secondary">{alert.status || 'open'}</span>
+                                    </div>
+                                    <span className="text-xs text-stourio-secondary whitespace-nowrap">{alert.created_at ? new Date(alert.created_at).toLocaleString() : '--'}</span>
+                                </div>
+                                {alert.description && <p className="text-sm text-stourio-secondary mt-2">{alert.description}</p>}
+                                <div className="flex gap-2 mt-3 items-center">
+                                    <button onClick={() => updateAlert(alert.id, 'acknowledge')} className="btn btn-outline btn-sm">Acknowledge</button>
+                                    <button onClick={() => updateAlert(alert.id, 'resolve')} className="btn btn-outline btn-sm">Resolve</button>
+                                    <button onClick={() => updateAlert(alert.id, 'false_positive')} className="btn btn-outline btn-sm">False Positive</button>
+                                    <button onClick={() => setExpanded(expanded === alert.id ? null : alert.id)} className="btn btn-sm btn-outline ml-auto">
+                                        {expanded === alert.id ? 'Collapse' : 'Evidence'}
+                                    </button>
+                                </div>
+                                {expanded === alert.id && (
+                                    <pre className="mt-3 bg-stourio-bg p-3 rounded text-xs font-mono overflow-x-auto max-h-60 overflow-y-auto">
+                                        {JSON.stringify(alert.evidence || alert, null, 2)}
+                                    </pre>
+                                )}
+                            </div>
+                        ))}
+                        {filtered.length === 0 && <p className="text-sm text-stourio-secondary card">No alerts match filters.</p>}
+                    </div>
+                </div>
+            );
+        }
+
+        // --- Telegram Viewer (read-only) ---
+        function TelegramViewer({ api }) {
+            const [messages, setMessages] = useState([]);
+            const [loading, setLoading] = useState(false);
+
+            const fetchMessages = () => {
+                setLoading(true);
+                api('/api/audit?limit=200&action=telegram')
+                    .then(data => {
+                        const items = Array.isArray(data) ? data : (data.logs || data.entries || []);
+                        setMessages(items);
+                    })
+                    .catch(console.error)
+                    .finally(() => setLoading(false));
+            };
+
+            useEffect(() => { fetchMessages(); }, []);
+
+            return (
+                <div>
+                    <div className="flex justify-between items-center mb-6">
+                        <h3 className="text-xl">Telegram Messages</h3>
+                        <div className="flex items-center gap-2">
+                            <span className="text-xs text-stourio-secondary">{messages.length} messages</span>
+                            <button onClick={fetchMessages} className="btn btn-outline btn-sm" disabled={loading}>
+                                {loading ? 'Loading...' : 'Refresh'}
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="card overflow-x-auto">
+                        <table className="text-sm">
+                            <thead><tr><th>Timestamp</th><th>From</th><th>Agent</th><th>Message</th><th>Direction</th></tr></thead>
+                            <tbody>
+                                {messages.map((msg, i) => (
+                                    <tr key={msg.id || i}>
+                                        <td className="whitespace-nowrap text-stourio-secondary">{msg.timestamp ? new Date(msg.timestamp).toLocaleString() : '--'}</td>
+                                        <td className="text-xs">{msg.user_id || msg.from || msg.source || '--'}</td>
+                                        <td className="text-xs font-mono">{msg.agent_id || msg.agent_template || '--'}</td>
+                                        <td className="max-w-md truncate">{msg.detail || msg.message || msg.content || '--'}</td>
+                                        <td><span className={`badge ${msg.direction === 'outbound' ? 'badge-low' : 'badge-medium'}`}>{msg.direction || msg.action || '--'}</span></td>
+                                    </tr>
+                                ))}
+                                {messages.length === 0 && !loading && <tr><td colSpan="5" className="text-stourio-secondary text-center">No telegram messages found.</td></tr>}
+                            </tbody>
+                        </table>
+                    </div>
+                    <p className="text-xs text-stourio-secondary mt-2">Read-only view. Messages sourced from audit trail.</p>
+                </div>
+            );
+        }
+
+        // --- Rules View ---
+        function RulesView({ api }) {
+            const [rules, setRules] = useState([]);
+            const [form, setForm] = useState({ name: '', pattern: '', pattern_type: 'regex', action: 'hard_reject', risk_level: 'critical' });
+
+            const fetchRules = () => api('/api/rules').then(setRules).catch(console.error);
+            useEffect(() => { fetchRules(); }, []);
+
+            const createRule = async (e) => {
+                e.preventDefault();
+                await api('/api/rules', 'POST', form);
+                setForm({ name: '', pattern: '', pattern_type: 'regex', action: 'hard_reject', risk_level: 'critical' });
+                fetchRules();
+            };
+
+            const deleteRule = async (id) => {
+                await api(`/api/rules/${id}`, 'DELETE');
+                fetchRules();
+            };
+
+            return (
+                <div className="grid grid-cols-3 gap-6">
+                    <div className="col-span-2 card">
+                        <h3 className="text-xl mb-4">Active Rules</h3>
+                        <table>
+                            <thead><tr><th>Name</th><th>Pattern</th><th>Type</th><th>Action</th><th></th></tr></thead>
+                            <tbody>
+                                {rules.map(r => (
+                                    <tr key={r.id}>
+                                        <td className="font-medium text-sm">{r.name}</td>
+                                        <td className="font-mono text-xs">{r.pattern}</td>
+                                        <td className="text-xs">{r.pattern_type}</td>
+                                        <td className="text-xs font-bold">{r.action}</td>
+                                        <td><button onClick={() => deleteRule(r.id)} className="text-stourio-red text-xs underline">Del</button></td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                    <div className="card h-fit">
+                        <h3 className="text-xl mb-4">Add Rule</h3>
+                        <form onSubmit={createRule}>
+                            <input className="input-field text-sm" placeholder="Rule Name (e.g., block_drop)" value={form.name} onChange={e => setForm({...form, name: e.target.value})} required />
+                            <input className="input-field text-sm font-mono" placeholder="Pattern" value={form.pattern} onChange={e => setForm({...form, pattern: e.target.value})} required />
+                            <select className="input-field text-sm" value={form.pattern_type} onChange={e => setForm({...form, pattern_type: e.target.value})}>
+                                <option value="regex">Regex</option><option value="keyword">Keyword</option><option value="event_type">Event Type</option>
+                            </select>
+                            <select className="input-field text-sm" value={form.action} onChange={e => setForm({...form, action: e.target.value})}>
+                                <option value="hard_reject">Hard Reject</option><option value="require_approval">Require Approval</option><option value="trigger_automation">Trigger Automation</option>
+                            </select>
+                            <select className="input-field text-sm" value={form.risk_level} onChange={e => setForm({...form, risk_level: e.target.value})}>
+                                <option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="critical">Critical</option>
+                            </select>
+                            <button type="submit" className="btn btn-primary w-full mt-2">Create Rule</button>
+                        </form>
+                    </div>
+                </div>
+            );
+        }
+
+        // --- Audit View ---
+        function AuditView({ api }) {
+            const [logs, setLogs] = useState([]);
+            useEffect(() => { api('/api/audit?limit=100').then(setLogs).catch(console.error); }, []);
+
+            return (
+                <div className="card">
+                    <h3 className="text-xl mb-4">Audit Ledger</h3>
+                    <div className="overflow-x-auto">
+                        <table className="text-sm">
+                            <thead><tr><th>Timestamp</th><th>Action</th><th>Details</th><th>Risk</th></tr></thead>
+                            <tbody>
+                                {logs.map(log => (
+                                    <tr key={log.id}>
+                                        <td className="whitespace-nowrap text-stourio-secondary">{new Date(log.timestamp).toLocaleString()}</td>
+                                        <td className="font-medium">{log.action}</td>
+                                        <td className="font-mono text-xs">{log.detail}</td>
+                                        <td>{log.risk_level && <span className="bg-stourio-bg px-2 py-1 rounded text-xs">{log.risk_level}</span>}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            );
+        }
+
+        // --- Cost Dashboard View ---
+        function CostView({ api }) {
+            const [range, setRange] = useState('24h');
+            const [summary, setSummary] = useState(null);
+            const [byProvider, setByProvider] = useState([]);
+            const [byAgent, setByAgent] = useState([]);
+            const [recentCalls, setRecentCalls] = useState([]);
+            const [loading, setLoading] = useState(false);
+            const chartRef = useRef(null);
+            const chartInstance = useRef(null);
+
+            const getRangeDates = (r) => {
+                const to = new Date();
+                const from = new Date();
+                if (r === '24h') from.setHours(from.getHours() - 24);
+                else if (r === '7d') from.setDate(from.getDate() - 7);
+                else if (r === '30d') from.setDate(from.getDate() - 30);
+                return { from: from.toISOString(), to: to.toISOString() };
+            };
+
+            const fetchData = async (r) => {
+                setLoading(true);
+                const { from, to } = getRangeDates(r);
+                try {
+                    const [usageData, providerData, agentData] = await Promise.all([
+                        api(`/api/usage?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`),
+                        api(`/api/usage/summary?group_by=provider`),
+                        api(`/api/usage/summary?group_by=agent_template`)
+                    ]);
+
+                    const calls = Array.isArray(usageData) ? usageData : (usageData.calls || []);
+                    const totalCost = calls.reduce((s, c) => s + (c.cost_usd || 0), 0);
+                    const totalTokens = calls.reduce((s, c) => s + (c.total_tokens || c.tokens || 0), 0);
+                    const cacheHits = calls.filter(c => c.cache_hit).length;
+                    const cacheRate = calls.length > 0 ? ((cacheHits / calls.length) * 100).toFixed(1) : 0;
+                    const estimatedSavings = calls.reduce((s, c) => s + (c.cache_savings_usd || 0), 0);
+
+                    setSummary({ totalCost, totalTokens, totalCalls: calls.length, cacheRate, estimatedSavings });
+                    setRecentCalls(calls.slice(0, 50));
+
+                    const providers = Array.isArray(providerData) ? providerData : (providerData.results || []);
+                    const agents = Array.isArray(agentData) ? agentData : (agentData.results || []);
+                    setByProvider(providers);
+                    setByAgent(agents);
+                } catch (e) {
+                    console.error('Cost fetch failed:', e);
+                }
+                setLoading(false);
+            };
+
+            useEffect(() => { fetchData(range); }, [range]);
+
+            useEffect(() => {
+                if (!chartRef.current || byProvider.length === 0) return;
+                if (chartInstance.current) chartInstance.current.destroy();
+                chartInstance.current = new Chart(chartRef.current, {
+                    type: 'bar',
+                    data: {
+                        labels: byProvider.map(p => p.provider || p.group || p.key || 'Unknown'),
+                        datasets: [{
+                            label: 'Cost (USD)',
+                            data: byProvider.map(p => p.total_cost_usd || p.cost_usd || p.cost || 0),
+                            backgroundColor: '#2e2e2e',
+                            borderColor: '#1a1a1a',
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: { legend: { display: false } },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: { callback: v => '$' + v.toFixed(4) }
+                            }
+                        }
+                    }
+                });
+            }, [byProvider]);
+
+            const fmtCost = (v) => v != null ? '$' + Number(v).toFixed(6) : '--';
+            const fmtNum = (v) => v != null ? Number(v).toLocaleString() : '--';
+
+            return (
+                <div>
+                    <div className="flex items-center gap-2 mb-6">
+                        <span className="text-sm text-stourio-secondary font-medium">Range:</span>
+                        {['24h', '7d', '30d'].map(r => (
+                            <button key={r} onClick={() => setRange(r)} className={`btn text-sm ${range === r ? 'btn-primary' : 'btn-outline'}`}>{r}</button>
+                        ))}
+                        {loading && <span className="text-xs text-stourio-secondary italic ml-2">Loading...</span>}
+                    </div>
+
+                    <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+                        <div className="card text-center">
+                            <p className="text-xs text-stourio-secondary mb-1">Total Cost</p>
+                            <p className="text-2xl font-serif font-semibold">{summary ? fmtCost(summary.totalCost) : '--'}</p>
+                        </div>
+                        <div className="card text-center">
+                            <p className="text-xs text-stourio-secondary mb-1">Total Tokens</p>
+                            <p className="text-2xl font-serif font-semibold">{summary ? fmtNum(summary.totalTokens) : '--'}</p>
+                        </div>
+                        <div className="card text-center">
+                            <p className="text-xs text-stourio-secondary mb-1">Total Calls</p>
+                            <p className="text-2xl font-serif font-semibold">{summary ? fmtNum(summary.totalCalls) : '--'}</p>
+                        </div>
+                        <div className="card text-center">
+                            <p className="text-xs text-stourio-secondary mb-1">Cache Hit Rate</p>
+                            <p className="text-2xl font-serif font-semibold text-stourio-green">{summary ? summary.cacheRate + '%' : '--'}</p>
+                        </div>
+                        <div className="card text-center">
+                            <p className="text-xs text-stourio-secondary mb-1">Est. Savings</p>
+                            <p className="text-2xl font-serif font-semibold text-stourio-green">{summary ? fmtCost(summary.estimatedSavings) : '--'}</p>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-6 mb-6">
+                        <div className="card">
+                            <h3 className="text-xl mb-4">Cost by Provider</h3>
+                            {byProvider.length === 0 && !loading
+                                ? <p className="text-sm text-stourio-secondary">No data.</p>
+                                : <canvas ref={chartRef} height="200"></canvas>
+                            }
+                        </div>
+                        <div className="card overflow-x-auto">
+                            <h3 className="text-xl mb-4">Cost by Agent</h3>
+                            {byAgent.length === 0 && !loading
+                                ? <p className="text-sm text-stourio-secondary">No data.</p>
+                                : (
+                                    <table className="text-sm">
+                                        <thead><tr><th>Agent</th><th>Calls</th><th>Tokens</th><th>Cost</th></tr></thead>
+                                        <tbody>
+                                            {byAgent.map((a, i) => (
+                                                <tr key={i}>
+                                                    <td className="font-medium">{a.agent_template || a.group || a.key || 'Unknown'}</td>
+                                                    <td>{fmtNum(a.total_calls || a.calls || 0)}</td>
+                                                    <td>{fmtNum(a.total_tokens || a.tokens || 0)}</td>
+                                                    <td>{fmtCost(a.total_cost_usd || a.cost_usd || a.cost || 0)}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                )
+                            }
+                        </div>
+                    </div>
+
+                    <div className="card overflow-x-auto">
+                        <h3 className="text-xl mb-4">Recent Calls</h3>
+                        {recentCalls.length === 0 && !loading
+                            ? <p className="text-sm text-stourio-secondary">No data.</p>
+                            : (
+                                <table className="text-sm">
+                                    <thead><tr><th>Time</th><th>Agent</th><th>Model</th><th>Tokens</th><th>Cost</th></tr></thead>
+                                    <tbody>
+                                        {recentCalls.map((c, i) => (
+                                            <tr key={i}>
+                                                <td className="whitespace-nowrap text-stourio-secondary">{c.created_at ? new Date(c.created_at).toLocaleString() : '--'}</td>
+                                                <td>{c.agent_template || c.agent || '--'}</td>
+                                                <td className="font-mono text-xs">{c.model || '--'}</td>
+                                                <td>{fmtNum(c.total_tokens || c.tokens || 0)}</td>
+                                                <td>{fmtCost(c.cost_usd || c.cost || 0)}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            )
+                        }
+                    </div>
+                </div>
+            );
+        }
+
+        // --- Agent Deployment Manager ---
+        function DeploymentManager({ api, status }) {
+            const [poolData, setPoolData] = useState({});
+            const [loading, setLoading] = useState(false);
+
+            const fetchPool = () => {
+                setLoading(true);
+                api('/api/status')
+                    .then(data => setPoolData(data.pool || {}))
+                    .catch(console.error)
+                    .finally(() => setLoading(false));
+            };
+
+            useEffect(() => {
+                fetchPool();
+                const interval = setInterval(fetchPool, 5000);
+                return () => clearInterval(interval);
+            }, []);
+
+            const agents = Object.entries(poolData);
+
+            return (
+                <div>
+                    <div className="flex justify-between items-center mb-6">
+                        <h3 className="text-xl">Agent Deployment</h3>
+                        <button onClick={fetchPool} className="btn btn-outline btn-sm" disabled={loading}>
+                            {loading ? 'Loading...' : 'Refresh'}
+                        </button>
+                    </div>
+
+                    {/* Summary cards */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                        <div className="card text-center">
+                            <p className="text-xs text-stourio-secondary mb-1">Agent Types</p>
+                            <p className="text-2xl font-serif font-semibold">{agents.length}</p>
+                        </div>
+                        <div className="card text-center">
+                            <p className="text-xs text-stourio-secondary mb-1">Total Active</p>
+                            <p className="text-2xl font-serif font-semibold">{agents.reduce((s, [, v]) => s + (v.active || 0), 0)}</p>
+                        </div>
+                        <div className="card text-center">
+                            <p className="text-xs text-stourio-secondary mb-1">Total Queued</p>
+                            <p className="text-2xl font-serif font-semibold">{agents.reduce((s, [, v]) => s + (v.queued || v.queue_depth || 0), 0)}</p>
+                        </div>
+                        <div className="card text-center">
+                            <p className="text-xs text-stourio-secondary mb-1">System Status</p>
+                            <p className={`text-2xl font-serif font-semibold ${status?.kill_switch ? 'text-stourio-red' : 'text-stourio-green'}`}>
+                                {status?.kill_switch ? 'HALTED' : 'RUNNING'}
+                            </p>
+                        </div>
+                    </div>
+
+                    {/* Per-agent details */}
+                    <div className="card overflow-x-auto">
+                        <table className="text-sm">
+                            <thead><tr><th>Agent</th><th>Active</th><th>Max Concurrent</th><th>Queued</th><th>Total Processed</th><th>Status</th></tr></thead>
+                            <tbody>
+                                {agents.map(([name, data]) => (
+                                    <tr key={name}>
+                                        <td className="font-medium">{name}</td>
+                                        <td className="text-center">{data.active || 0}</td>
+                                        <td className="text-center">{data.max_concurrent || data.concurrency || '--'}</td>
+                                        <td className="text-center">
+                                            <span className={(data.queued || data.queue_depth || 0) > 0 ? 'text-stourio-orange font-bold' : ''}>
+                                                {data.queued || data.queue_depth || 0}
+                                            </span>
+                                        </td>
+                                        <td className="text-center">{data.total_processed || data.completed || '--'}</td>
+                                        <td>
+                                            <span className={`badge ${(data.active || 0) > 0 ? 'badge-low' : 'badge-medium'}`}>
+                                                {(data.active || 0) > 0 ? 'running' : 'idle'}
+                                            </span>
+                                        </td>
+                                    </tr>
+                                ))}
+                                {agents.length === 0 && <tr><td colSpan="6" className="text-stourio-secondary text-center">No pool data available.</td></tr>}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
