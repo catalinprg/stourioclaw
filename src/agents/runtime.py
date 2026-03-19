@@ -164,6 +164,9 @@ async def execute_agent(
         execution.result = "Lock acquisition failed: another agent is already handling this resource."
         return execution
 
+    from src.sandbox.session import SessionSandbox
+    sandbox = SessionSandbox(execution.id)
+
     # Heartbeat to extend the lock/token validity
     async def heartbeat():
         while True:
@@ -317,6 +320,7 @@ async def execute_agent(
     finally:
         heartbeat_task.cancel()
         await redis_store.release_lock(resource_id)
+        sandbox.cleanup()
 
     # Persist agent memory
     try:

@@ -310,6 +310,20 @@ async def lifespan(app: FastAPI):
         run_scheduler_loop(async_session, settings.scheduler_tick_seconds)
     )
 
+    # Periodic sandbox cleanup
+    async def sandbox_cleanup_worker():
+        from src.sandbox.session import SessionSandbox
+        while True:
+            try:
+                await asyncio.sleep(3600)  # Every hour
+                SessionSandbox.cleanup_stale_sessions(max_age_hours=24)
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error("Sandbox cleanup error: %s", e)
+
+    sandbox_cleanup_task = asyncio.create_task(sandbox_cleanup_worker())
+
     # 10. Daemon manager
     daemon_manager = None
     if settings.daemon_manager_enabled:
@@ -342,7 +356,8 @@ async def lifespan(app: FastAPI):
     auditor_task.cancel()
     scheduler_task.cancel()
     reindex_task.cancel()
-    for task in (consumer_task, escalation_task, auditor_task, scheduler_task, reindex_task):
+    sandbox_cleanup_task.cancel()
+    for task in (consumer_task, escalation_task, auditor_task, scheduler_task, reindex_task, sandbox_cleanup_task):
         try:
             await task
         except asyncio.CancelledError:
