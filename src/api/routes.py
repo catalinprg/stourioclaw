@@ -28,6 +28,8 @@ from src.agents.registry import AgentRegistry
 from src.agents.runtime import list_templates
 from src.orchestrator.concurrency import get_pool
 from src.automation.workflows import list_workflows
+from src.scheduler.models import CronJob
+from src.scheduler.store import CronStore
 
 logger = logging.getLogger("stourio.api")
 
@@ -314,6 +316,68 @@ async def delete_agent(
     await session.commit()
     await audit.log("AGENT_DELETED", f"Agent '{name}' deleted via API")
     return {"status": "deleted", "name": name}
+
+
+# =============================================================================
+# CRON JOBS - Scheduled agent execution
+# =============================================================================
+
+@router.get("/cron")
+async def list_cron_jobs(session: AsyncSession = Depends(get_session)):
+    store = CronStore(session)
+    jobs = await store.list_all()
+    return [
+        {
+            "id": j.id,
+            "name": j.name,
+            "schedule": j.schedule,
+            "agent_type": j.agent_type,
+            "objective": j.objective,
+            "conversation_id": j.conversation_id,
+            "active": j.active,
+            "last_run_at": j.last_run_at.isoformat() if j.last_run_at else None,
+            "next_run_at": j.next_run_at.isoformat() if j.next_run_at else None,
+        }
+        for j in jobs
+    ]
+
+
+@router.post("/cron", status_code=201)
+async def create_cron_job(
+    job: CronJob,
+    session: AsyncSession = Depends(get_session),
+):
+    store = CronStore(session)
+    existing = await store.get_by_name(job.name)
+    if existing:
+        raise HTTPException(status_code=409, detail=f"Cron job '{job.name}' already exists.")
+    record = await store.create(job)
+    await audit.log("CRON_CREATED", f"Cron job '{job.name}' created (schedule={job.schedule})")
+    return {"id": record.id, "name": record.name, "next_run_at": record.next_run_at.isoformat() if record.next_run_at else None}
+
+
+@router.delete("/cron/{name}")
+async def delete_cron_job(name: str, session: AsyncSession = Depends(get_session)):
+    store = CronStore(session)
+    deleted = await store.delete(name)
+    if not deleted:
+        raise HTTPException(status_code=404, detail=f"Cron job '{name}' not found.")
+    await audit.log("CRON_DELETED", f"Cron job '{name}' deleted")
+    return {"status": "deleted", "name": name}
+
+
+@router.post("/cron/{name}/toggle")
+async def toggle_cron_job(
+    name: str,
+    active: bool = True,
+    session: AsyncSession = Depends(get_session),
+):
+    store = CronStore(session)
+    record = await store.toggle(name, active)
+    if record is None:
+        raise HTTPException(status_code=404, detail=f"Cron job '{name}' not found.")
+    await audit.log("CRON_TOGGLED", f"Cron job '{name}' -> active={active}")
+    return {"name": name, "active": record.active}
 
 
 # =============================================================================
