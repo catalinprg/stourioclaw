@@ -45,6 +45,11 @@ async def text_to_speech(arguments: dict) -> dict:
 
     voice_id = arguments.get("voice_id", settings.elevenlabs_voice_id)
 
+    # Validate voice_id format (alphanumeric only — prevent path traversal)
+    import re
+    if not re.match(r'^[a-zA-Z0-9]+$', voice_id):
+        return {"error": f"Invalid voice_id format: must be alphanumeric"}
+
     try:
         # Generate audio via ElevenLabs
         async with httpx.AsyncClient(timeout=30.0) as client:
