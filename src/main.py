@@ -25,8 +25,52 @@ logging.basicConfig(
 logger = logging.getLogger("stourio")
 
 
+def _auto_generate_api_key():
+    """Auto-generate STOURIO_API_KEY if not set. Persists to .env file."""
+    import secrets
+    import os
+
+    if settings.stourio_api_key:
+        return
+
+    key = secrets.token_urlsafe(32)
+    settings.stourio_api_key = key
+
+    # Persist to .env so it survives restarts
+    env_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env")
+    try:
+        if os.path.exists(env_path):
+            with open(env_path, "r") as f:
+                content = f.read()
+            if "STOURIO_API_KEY=" in content:
+                # Replace empty value
+                lines = content.splitlines()
+                for i, line in enumerate(lines):
+                    if line.startswith("STOURIO_API_KEY=") and not line.split("=", 1)[1].strip():
+                        lines[i] = f"STOURIO_API_KEY={key}"
+                        break
+                with open(env_path, "w") as f:
+                    f.write("\n".join(lines) + "\n")
+            else:
+                with open(env_path, "a") as f:
+                    f.write(f"\nSTOURIO_API_KEY={key}\n")
+        else:
+            with open(env_path, "w") as f:
+                f.write(f"STOURIO_API_KEY={key}\n")
+    except OSError as e:
+        logger.warning("Could not persist STOURIO_API_KEY to .env: %s", e)
+
+    logger.info("=" * 60)
+    logger.info("AUTO-GENERATED STOURIO_API_KEY (saved to .env):")
+    logger.info("  %s", key)
+    logger.info("Use this key for admin panel login and API auth.")
+    logger.info("=" * 60)
+
+
 def _validate_env():
     """Check required env vars on startup. Fail loud, not silent."""
+    _auto_generate_api_key()
+
     missing = []
     if not settings.openrouter_api_key:
         missing.append("OPENROUTER_API_KEY")
@@ -34,8 +78,6 @@ def _validate_env():
         missing.append("TELEGRAM_BOT_TOKEN")
     if not settings.telegram_allowed_user_ids:
         missing.append("TELEGRAM_ALLOWED_USER_IDS")
-    if not settings.stourio_api_key:
-        missing.append("STOURIO_API_KEY")
 
     warnings = []
     if not settings.openai_api_key:
@@ -235,12 +277,6 @@ async def lifespan(app: FastAPI):
     logger.info(f"Orchestrator model: {settings.orchestrator_model}")
     logger.info(f"LLM gateway: OpenRouter (default: {settings.openrouter_default_model})")
     logger.info("=" * 60)
-
-    if not settings.stourio_api_key:
-        logger.warning("!" * 60)
-        logger.warning("STOURIO_API_KEY is not set. ALL API requests will be rejected.")
-        logger.warning("Run: python3 scripts/generate_key.py")
-        logger.warning("!" * 60)
 
     # 9. Background workers
     consumer_task = asyncio.create_task(signal_consumer_worker())
