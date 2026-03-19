@@ -28,7 +28,7 @@ class AgentPool:
         try:
             async with sem:
                 self._queued[agent_type] = max(0, self._queued[agent_type] - 1)
-                return await execute_agent(agent_type=agent_type, **kwargs)
+                return await execute_agent(agent_name=agent_type, **kwargs)
         except Exception:
             self._queued[agent_type] = max(0, self._queued[agent_type] - 1)
             raise

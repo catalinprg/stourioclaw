@@ -2,203 +2,59 @@ from __future__ import annotations
 import json
 import logging
 import asyncio
+import re
 from datetime import datetime
+from sqlalchemy.ext.asyncio import AsyncSession
 from src.config import settings
 from src.plugins.registry import get_registry
 from src.models.schemas import (
     AgentTemplate, AgentExecution, ExecutionStatus, ChatMessage, ToolDefinition, new_id,
 )
 from src.adapters.registry import get_agent_adapter
+from src.agents.registry import AgentRegistry
 from src.persistence import redis_store, audit
 from src.persistence.conversations import get_history
+from src.persistence.database import AgentModel
 
 logger = logging.getLogger("stourio.agents")
 
-
-# --- Built-in agent templates ---
-
-AGENT_TEMPLATES: dict[str, AgentTemplate] = {
-    "diagnose_repair": AgentTemplate(
-        id="diagnose_repair",
-        name="Diagnose & Repair",
-        provider_override="anthropic",
-        model_override="claude-3-5-sonnet-latest",
-        role="""You are an operations agent specialized in diagnosing system issues and applying fixes.
-
-Your process:
-1. Analyze the alert/signal context provided
-2. Use available tools to gather more data about the system state
-3. Identify the root cause
-4. Fetch relevant internal runbooks or documentation if the component is unknown or complex
-5. Propose a fix
-6. If the fix is safe (low blast radius), apply it
-7. If the fix is risky, report back with your analysis and recommendation
-
-Always explain your reasoning step by step. Never execute destructive operations without confirmation.""",
-        tools=[
-            ToolDefinition(
-                name="get_system_metrics",
-                description="Get current metrics for a system component (CPU, memory, disk, network)",
-                parameters={"type": "object", "properties": {"component": {"type": "string"}, "metric": {"type": "string"}}, "required": ["component"]},
-            ),
-            ToolDefinition(
-                name="get_recent_logs",
-                description="Retrieve recent log entries for a service",
-                parameters={"type": "object", "properties": {"service": {"type": "string"}, "lines": {"type": "integer", "default": 50}, "severity": {"type": "string"}}, "required": ["service"]},
-            ),
-            ToolDefinition(
-                name="execute_remediation",
-                description="Execute a safe remediation action (restart, scale, clear cache)",
-                parameters={"type": "object", "properties": {"action": {"type": "string"}, "target": {"type": "string"}, "parameters": {"type": "object"}}, "required": ["action", "target"]},
-            ),
-            ToolDefinition(
-                name="read_internal_runbook",
-                description="Fetch internal documentation or troubleshooting guides for a specific service.",
-                parameters={
-                    "type": "object",
-                    "properties": {
-                        "service_name": {"type": "string", "description": "The exact name of the service or component to look up."}
-                    },
-                    "required": ["service_name"],
-                },
-            ),
-        ],
-        max_steps=8,
-    ),
-    "escalate": AgentTemplate(
-        id="escalate",
-        name="Escalate",
-        provider_override="openai",
-        model_override="gpt-4o",
-        role="""You are an escalation agent. Your job is to:
-1. Summarize the situation clearly and concisely
-2. Assess severity and business impact
-3. Identify who should be notified
-4. Draft a clear escalation message
-5. Send the notification through the appropriate channel
-
-Be direct. Lead with impact, then cause, then recommended action.""",
-        tools=[
-            ToolDefinition(
-                name="send_notification",
-                description="Send a notification to a channel (Slack, email, PagerDuty)",
-                parameters={
-                    "type": "object",
-                    "properties": {
-                        "channel": {"type": "string", "enum": ["slack", "email", "pagerduty"]},
-                        "target": {"type": "string", "description": "Channel name, email, or service ID"},
-                        "message": {"type": "string"},
-                        "severity": {"type": "string", "enum": ["info", "warning", "critical"]},
-                    },
-                    "required": ["channel", "target", "message"],
-                },
-            ),
-        ],
-        max_steps=4,
-    ),
-    "take_action": AgentTemplate(
-        id="take_action",
-        name="Take Action",
-        provider_override="google",
-        model_override="gemini-3.1-pro-preview",
-        role="""You are a general-purpose operations agent. You handle tasks that don't fit
-into diagnosis or escalation: data lookups, status checks, report generation,
-API calls, and coordination tasks.
-
-Use the available tools to complete the user's request. Report results clearly.""",
-        tools=[
-            ToolDefinition(
-                name="call_api",
-                description="Make an API call to an internal or external service",
-                parameters={
-                    "type": "object",
-                    "properties": {
-                        "method": {"type": "string", "enum": ["GET", "POST", "PUT"]},
-                        "url": {"type": "string"},
-                        "body": {"type": "object"},
-                    },
-                    "required": ["method", "url"],
-                },
-            ),
-            ToolDefinition(
-                name="generate_report",
-                description="Generate a formatted report from data",
-                parameters={
-                    "type": "object",
-                    "properties": {
-                        "title": {"type": "string"},
-                        "data": {"type": "object"},
-                        "format": {"type": "string", "enum": ["text", "csv", "json"]},
-                    },
-                    "required": ["title", "data"],
-                },
-            ),
-        ],
-        max_steps=6,
-    ),
-}
+# --- Deprecated stubs (removed in Task 19 when callers migrate to DB) ---
+AGENT_TEMPLATES: dict[str, AgentTemplate] = {}
 
 
 def load_agent_templates(directory: str | None = None) -> dict[str, AgentTemplate]:
-    import os
-    import yaml as yaml_lib
-    from src.plugins.registry import get_registry
-
-    dir_path = directory or settings.agent_templates_dir
-    templates = dict(AGENT_TEMPLATES)  # Start with built-in defaults
-    if not os.path.isdir(dir_path):
-        return templates
-    for filename in sorted(os.listdir(dir_path)):
-        if not filename.endswith((".yaml", ".yml")):
-            continue
-        filepath = os.path.join(dir_path, filename)
-        try:
-            with open(filepath, "r") as f:
-                defn = yaml_lib.safe_load(f)
-            if not defn or "id" not in defn:
-                continue
-            provider_override = model_override = None
-            if "provider_override" in defn:
-                parts = defn["provider_override"].split("/", 1)
-                provider_override = parts[0]
-                model_override = parts[1] if len(parts) > 1 else None
-            tool_defs = []
-            registry = get_registry()
-            for tool_name in defn.get("tools", []):
-                tool = registry.get(tool_name)
-                if tool:
-                    td = tool.to_tool_definition()
-                    tool_defs.append(ToolDefinition(
-                        name=td["name"],
-                        description=td["description"],
-                        parameters=td["parameters"],
-                    ))
-            template = AgentTemplate(
-                id=defn["id"],
-                name=defn.get("name", defn["id"]),
-                description=defn.get("description", ""),
-                role=defn.get("system_prompt", ""),
-                tools=tool_defs,
-                max_steps=defn.get("max_steps", 8),
-                provider_override=provider_override,
-                model_override=model_override,
-            )
-            templates[defn["id"]] = template
-            logger.info(f"Loaded agent template: {defn['id']} from {filepath}")
-        except Exception as e:
-            logger.error(f"Failed to load agent template {filepath}: {e}")
-    return templates
+    """Deprecated: agents now live in the DB. Returns empty dict."""
+    logger.warning("load_agent_templates() is deprecated — agents are DB-backed now")
+    return {}
 
 
 def get_template(agent_type: str) -> AgentTemplate | None:
+    """Deprecated: use AgentRegistry.get_by_name() instead."""
     return AGENT_TEMPLATES.get(agent_type)
 
 
 def list_templates() -> list[AgentTemplate]:
+    """Deprecated: use AgentRegistry.list_active() instead."""
     return list(AGENT_TEMPLATES.values())
 
 
-import re
+def _resolve_tools(agent: AgentModel) -> list[ToolDefinition]:
+    """Resolve tool name strings from DB agent into ToolDefinition objects."""
+    registry = get_registry()
+    tool_defs = []
+    for tool_name in (agent.tools or []):
+        tool = registry.get(tool_name)
+        if tool:
+            td = tool.to_tool_definition()
+            tool_defs.append(ToolDefinition(
+                name=td["name"],
+                description=td["description"],
+                parameters=td["parameters"],
+            ))
+        else:
+            logger.warning("Tool '%s' referenced by agent '%s' not found in registry", tool_name, agent.name)
+    return tool_defs
+
 
 # Strict pattern: alphanumeric, underscores, hyphens only
 _SAFE_TOOL_NAME = re.compile(r"^[a-zA-Z0-9_\-]+$")
@@ -226,20 +82,26 @@ async def default_tool_executor(tool_name: str, arguments: dict) -> str:
 
 
 async def execute_agent(
-    agent_type: str,
+    agent_name: str,
     objective: str,
     context: str,
+    session: AsyncSession,
     input_id: str | None = None,
     tool_executor: callable | None = None,
     conversation_id: str | None = None,
 ) -> AgentExecution:
-    template = get_template(agent_type)
-    if not template:
-        raise ValueError(f"Unknown agent type: {agent_type}")
+    # Load agent config from DB
+    reg = AgentRegistry(session)
+    agent = await reg.get_by_name(agent_name)
+    if not agent:
+        raise ValueError(f"Unknown agent: {agent_name}")
+
+    # Resolve tool definitions from plugin registry
+    tools = _resolve_tools(agent)
 
     execution = AgentExecution(
         id=new_id(),
-        agent_type=agent_type,
+        agent_type=agent_name,
         objective=objective,
         context=context,
         status=ExecutionStatus.RUNNING,
@@ -248,7 +110,7 @@ async def execute_agent(
     # Acquire lock with a fencing token to prevent state collisions
     resource_id = f"agent_work:{execution.id}"
     fencing_token = await redis_store.acquire_lock_with_token(resource_id, ttl_seconds=30)
-    
+
     if not fencing_token:
         execution.status = ExecutionStatus.FAILED
         execution.result = "Lock acquisition failed: another agent is already handling this resource."
@@ -264,17 +126,15 @@ async def execute_agent(
 
     await audit.log(
         "AGENT_STARTED",
-        f"Agent '{template.name}' started: {objective}",
+        f"Agent '{agent.display_name}' started: {objective}",
         input_id=input_id,
         execution_id=execution.id,
     )
 
     try:
-        # Dynamically fetch the primary adapter for this template
-        current_provider = template.provider_override or settings.agent_provider
-        current_model = template.model_override or settings.agent_model
-        adapter = get_agent_adapter(current_provider, current_model)
-        
+        # Get adapter — OpenRouter handles failover via route: "fallback"
+        adapter = get_agent_adapter(agent.model)
+
         messages = [
             ChatMessage(role="user", content=f"Objective: {objective}\n\nContext:\n{context}")
         ]
@@ -287,7 +147,7 @@ async def execute_agent(
                 messages.insert(0, ChatMessage(role="user", content=f"Previous conversation context:\n{history_context}"))
 
         # Semantic memory recall
-        system_prompt = template.role
+        system_prompt = agent.system_prompt
         from src.tools.python.knowledge_search import _retriever
         if _retriever:
             try:
@@ -298,14 +158,14 @@ async def execute_agent(
             except Exception as e:
                 logger.warning(f"Memory recall failed: {e}")
 
-        for step in range(template.max_steps):
+        for step in range(agent.max_steps):
             # 1. Kill switch check
             if await redis_store.is_killed():
                 execution.status = ExecutionStatus.HALTED
                 execution.result = "Halted by kill switch"
                 await audit.log(
                     "AGENT_HALTED",
-                    f"Agent '{template.name}' halted by kill switch at step {step + 1}",
+                    f"Agent '{agent.display_name}' halted by kill switch at step {step + 1}",
                     execution_id=execution.id,
                 )
                 break
@@ -321,43 +181,12 @@ async def execute_agent(
                 )
                 break
 
-            # 3. LLM Reasoning Call with Execution Failover
-            try:
-                response = await adapter.complete(
-                    system_prompt=system_prompt,
-                    messages=messages,
-                    tools=template.tools,
-                )
-            except Exception as llm_error:
-                fallback_provider = settings.agent_provider
-                fallback_model = settings.agent_model
-
-                # If we are already using the fallback, there is nowhere to fail over to
-                if current_provider == fallback_provider and current_model == fallback_model:
-                    raise Exception(f"Primary provider {current_provider} failed and no secondary fallback exists: {str(llm_error)}")
-
-                logger.warning(
-                    f"Provider outage ({current_provider}) for agent {agent_type}. "
-                    f"Initiating failover to fallback config ({fallback_provider} / {fallback_model}). Error: {str(llm_error)}"
-                )
-
-                await audit.log(
-                    "AGENT_FAILOVER",
-                    f"Provider {current_provider} failed. Failing over to {fallback_provider}.",
-                    execution_id=execution.id,
-                )
-
-                # Swap state to fallback configuration
-                current_provider = fallback_provider
-                current_model = fallback_model
-                adapter = get_agent_adapter(current_provider, current_model)
-
-                # Retry the exact same prompt against the fallback provider
-                response = await adapter.complete(
-                    system_prompt=system_prompt,
-                    messages=messages,
-                    tools=template.tools,
-                )
+            # 3. LLM Reasoning Call — no failover needed, OpenRouter handles it
+            response = await adapter.complete(
+                system_prompt=system_prompt,
+                messages=messages,
+                tools=tools,
+            )
 
             if response.has_tool_call:
                 tc = response.first_tool_call
@@ -400,13 +229,13 @@ async def execute_agent(
 
                 await audit.log(
                     "AGENT_COMPLETED",
-                    f"Agent '{template.name}' completed in {step + 1} steps",
+                    f"Agent '{agent.display_name}' completed in {step + 1} steps",
                     execution_id=execution.id,
                 )
                 break
         else:
             execution.status = ExecutionStatus.COMPLETED
-            execution.result = f"Agent reached maximum steps ({template.max_steps})."
+            execution.result = f"Agent reached maximum steps ({agent.max_steps})."
             execution.completed_at = datetime.utcnow()
 
     except Exception as e:
@@ -415,7 +244,7 @@ async def execute_agent(
         logger.exception(f"Agent execution failed: {e}")
         await audit.log(
             "AGENT_FAILED",
-            f"Agent '{template.name}' failed: {str(e)}",
+            f"Agent '{agent.display_name}' failed: {str(e)}",
             execution_id=execution.id,
         )
     finally:
@@ -429,7 +258,7 @@ async def execute_agent(
         if _retriever and execution.result:
             actions = [s.get("tool_name", s.get("tool", "unknown")) for s in execution.steps if s.get("tool_name") or s.get("tool")]
             memory_text = (
-                f"# Agent Execution: {agent_type}\n"
+                f"# Agent Execution: {agent_name}\n"
                 f"## Trigger\n{objective}\n"
                 f"## Actions Taken\n{', '.join(actions)}\n"
                 f"## Conclusion\n{execution.result}\n"
@@ -439,9 +268,9 @@ async def execute_agent(
                 content=memory_text,
                 source_type="agent_memory",
                 source_path=f"agent/{execution.id}",
-                title=f"{agent_type} - {objective[:100]}",
+                title=f"{agent_name} - {objective[:100]}",
                 extra_metadata={
-                    "agent_template": agent_type,
+                    "agent_template": agent_name,
                     "execution_id": execution.id,
                     "conversation_id": conversation_id or "",
                 },
