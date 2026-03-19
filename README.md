@@ -1,6 +1,6 @@
 # Stourioclaw
 
-Self-hosted personal AI assistant with user-defined agents, Telegram integration, scheduled jobs, inter-agent delegation, browser automation, and hybrid security monitoring.
+Self-hosted personal AI assistant with user-defined agents, persistent daemon agents, async inter-agent messaging, MCP client for external tools, Telegram integration, scheduled jobs, browser automation, and hybrid security monitoring.
 
 ## Architecture
 
@@ -17,14 +17,18 @@ Telegram / Webhook API
         |
    [Delegation] → agents can delegate to other agents (depth-limited)
         |
+   [Messaging] → async agent-to-agent via Redis stream inboxes
+        |
    [CyberSecurity] → inline intercept (high-risk) + passive audit
         |
    [Approval Flow] → human-in-the-loop if flagged
         |
    [Audit Trail] → immutable log
 
+   [Daemons]   → persistent agents with heartbeat loops + inbox wake
    [Scheduler] → cron jobs fire agents on schedule
    [Browser]   → Playwright-based web automation (domain-restricted)
+   [MCP Client]→ agents consume external tool servers (Notion, GitHub, etc.)
 ```
 
 ## Quick Start (Local)
@@ -90,7 +94,7 @@ Admin panel: `https://your-domain.com/admin` (login with your `STOURIO_API_KEY`)
 
 ## Agents
 
-Create agents via the API (`POST /api/agents`) or admin panel. Each agent has a name, model, system prompt, and assigned tools.
+Create agents via the API (`POST /api/agents`) or admin panel. Each agent has a name, model, system prompt, assigned tools, and execution mode (`oneshot` or `daemon`).
 
 **Default agent:**
 
@@ -114,6 +118,91 @@ Create agents via the API (`POST /api/agents`) or admin panel. Each agent has a 
 | `generate_report` | Create markdown reports | Low |
 | `delegate_to_agent` | Delegate work to another agent (depth-limited to 3) | External |
 | `browser_action` | Web automation: navigate, click, type, screenshot, extract text | External |
+| `send_message` | Send async message to another agent's inbox (peer-allowlisted) | External |
+| `read_messages` | Check your inbox for pending messages | Low |
+| `heartbeat_ack` | Daemon signals "nothing to report" (suppresses output) | Low |
+| MCP tools | Any tool from connected MCP servers (e.g. `notion__search`) | External |
+
+## Daemon Agents
+
+Persistent agents that run continuously with a heartbeat loop. Create a daemon by setting `execution_mode: "daemon"` on an agent:
+
+```bash
+curl -X POST http://localhost:8000/api/agents \
+  -H "X-STOURIO-KEY: your-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "watchdog",
+    "display_name": "Watchdog",
+    "description": "Monitors audit logs for anomalies",
+    "model": "openai/gpt-4o-mini",
+    "tools": ["read_audit_log", "send_notification", "heartbeat_ack"],
+    "execution_mode": "daemon",
+    "daemon_config": {
+      "tick_seconds": 300,
+      "heartbeat_prompt": "Check audit logs for anomalies. If nothing unusual, call heartbeat_ack.",
+      "active_hours": {"start": "08:00", "end": "22:00"},
+      "max_messages_per_cycle": 10
+    }
+  }'
+```
+
+Control daemons at runtime:
+```bash
+POST /api/daemons/{name}/start
+POST /api/daemons/{name}/stop
+POST /api/daemons/{name}/restart
+```
+
+Daemons wake on: inbox messages (instant via pub/sub) or tick interval (heartbeat). If a daemon calls `heartbeat_ack`, output is suppressed. Daemons restart fresh on container restart — no checkpointing, but inbox messages are durable (Redis streams).
+
+## Inter-Agent Messaging
+
+Agents can send async messages to each other via inbox streams. Messaging is disabled by default — enable per agent via `allowed_peers`:
+
+```bash
+# Allow "analyst" to message "watchdog"
+curl -X PUT http://localhost:8000/api/agents/watchdog \
+  -H "X-STOURIO-KEY: your-key" \
+  -H "Content-Type: application/json" \
+  -d '{"allowed_peers": ["analyst"]}'
+```
+
+Messages to running daemons wake them immediately. Messages to non-running agents trigger a oneshot execution.
+
+## MCP Client — External Tool Servers
+
+Connect external MCP servers so agents can use their tools (Notion, GitHub, Slack, etc.):
+
+```bash
+# 1. Set the secret in .env
+# NOTION_MCP_TOKEN=your-notion-token
+
+# 2. Register the MCP server
+curl -X POST http://localhost:8000/api/mcp-servers \
+  -H "X-STOURIO-KEY: your-key" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "notion", "endpoint_url": "http://localhost:3456/sse", "transport": "sse", "auth_env_var": "NOTION_MCP_TOKEN"}'
+
+# 3. Assign to an agent
+curl -X PUT http://localhost:8000/api/agents/assistant \
+  -H "X-STOURIO-KEY: your-key" \
+  -H "Content-Type: application/json" \
+  -d '{"mcp_servers": ["notion"]}'
+```
+
+The agent now sees all tools from the Notion MCP server (e.g., `notion__search`, `notion__create_page`). Tools are discovered automatically on connect. All MCP tools go through the security interceptor.
+
+```bash
+# List connected servers + discovered tools
+GET /api/mcp-servers
+
+# Re-discover tools (if server added new ones)
+POST /api/mcp-servers/{name}/refresh
+
+# Remove
+DELETE /api/mcp-servers/{name}
+```
 
 ## Cron Jobs
 
@@ -198,6 +287,10 @@ Add to your Claude Code MCP config:
 | `BROWSER_HEADLESS` | Run Chromium headless | No (`true`) |
 | `BROWSER_TIMEOUT_MS` | Browser action timeout | No (`30000`) |
 | `SCHEDULER_TICK_SECONDS` | Cron job check interval | No (`30`) |
+| `DAEMON_MANAGER_ENABLED` | Enable daemon agent support | No (`true`) |
+| `DAEMON_DEFAULT_TICK_SECONDS` | Default heartbeat interval for daemons | No (`300`) |
+| `MCP_CLIENT_TIMEOUT` | Timeout for MCP server connections | No (`30`) |
+| `MCP_STDIO_ALLOWED_COMMANDS` | Allowlist for stdio MCP server commands | No (`[]`) |
 
 ## Project Structure
 
@@ -209,8 +302,9 @@ stourioclaw/
     api/               # FastAPI routes + rate limiting
     automation/        # Workflow integration
     guardrails/        # Approval flow + kill switch
-    mcp/               # MCP server (SSE transport)
-      tools/           # MCP tool definitions
+    daemons/           # Daemon manager, loop, inbox (Redis streams)
+    mcp/               # MCP server + client (SSE transport)
+      tools/           # MCP tool definitions (local + messaging)
     models/            # Pydantic schemas
     notifications/     # Dispatcher + adapters (Slack, PagerDuty, email, webhook)
       adapters/        # Notification channel adapters
