@@ -63,6 +63,7 @@ services:
         condition: service_healthy
     volumes:
       - ./workspace:/app/workspace
+      - /var/run/docker.sock:/var/run/docker.sock:ro  # For sandboxed code execution
     restart: unless-stopped
 
 volumes:

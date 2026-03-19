@@ -102,6 +102,12 @@ class Settings(BaseSettings):
     browser_timeout_ms: int = 30000
     browser_allowed_domains: list[str] = []
 
+    # Code execution sandbox
+    code_sandbox_enabled: bool = True
+    code_sandbox_image: str = "python:3.12-slim"
+    code_sandbox_memory: str = "256m"
+    code_sandbox_cpus: str = "0.5"
+
     # MCP client
     mcp_client_timeout: int = 30
     mcp_stdio_allowed_commands: list[str] = []

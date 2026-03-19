@@ -423,7 +423,7 @@ Path traversal is blocked — agents cannot access files outside the workspace.
 | `language` | string | no | "python" | `python` or `bash` |
 | `timeout` | int | no | 30 | Timeout in seconds |
 
-Runs in a subprocess with timeout protection.
+**Sandboxed execution:** By default, code runs in a disposable Docker container with no network access, no environment variables, read-only filesystem, and memory/CPU limits. If Docker is unavailable (local dev), falls back to subprocess with stripped environment. Configure via `CODE_SANDBOX_*` env vars.
 
 #### call_api
 | Parameter | Type | Required | Default | Description |
@@ -888,6 +888,10 @@ Memory: Redis capped at 256MB (allkeys-lru). Chromium gets 2GB shared memory (`s
 | `SCHEDULER_TICK_SECONDS` | `30` | Cron check interval |
 | `DAEMON_MANAGER_ENABLED` | `true` | Enable daemons |
 | `DAEMON_DEFAULT_TICK_SECONDS` | `300` | Default heartbeat interval |
+| `CODE_SANDBOX_ENABLED` | `true` | Run code in Docker containers |
+| `CODE_SANDBOX_IMAGE` | `python:3.12-slim` | Docker image for sandbox |
+| `CODE_SANDBOX_MEMORY` | `256m` | Memory limit per execution |
+| `CODE_SANDBOX_CPUS` | `0.5` | CPU limit per execution |
 | `MCP_CLIENT_TIMEOUT` | `30` | MCP connection timeout |
 | `MCP_STDIO_ALLOWED_COMMANDS` | `[]` | Stdio command allowlist |
 
