@@ -268,6 +268,12 @@ async def lifespan(app: FastAPI):
     retriever = Retriever(embedder=embedder, reranker=reranker)
     set_retriever(retriever)
 
+    # 5b. Document re-indexing worker
+    from src.rag.reindex_worker import run_reindex_loop
+    reindex_task = asyncio.create_task(
+        run_reindex_loop(embedder, interval_seconds=settings.reindex_interval_seconds)
+    )
+
     # 6. Wire placeholder tools
     from src.mcp.tools.audit import set_session_factory
     from src.mcp.tools.notification import set_telegram_client
@@ -335,7 +341,8 @@ async def lifespan(app: FastAPI):
     escalation_task.cancel()
     auditor_task.cancel()
     scheduler_task.cancel()
-    for task in (consumer_task, escalation_task, auditor_task, scheduler_task):
+    reindex_task.cancel()
+    for task in (consumer_task, escalation_task, auditor_task, scheduler_task, reindex_task):
         try:
             await task
         except asyncio.CancelledError:

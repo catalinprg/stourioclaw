@@ -215,7 +215,10 @@ async def execute_agent(
         from src.tools.python.knowledge_search import _retriever
         if _retriever:
             try:
-                memories = await _retriever.search(query=objective, source_type="agent_memory", top_k_final=settings.agent_memory_recall_count)
+                # Recall both raw execution memories and curated facts
+                raw_memories = await _retriever.search(query=objective, source_type="agent_memory", top_k_final=settings.agent_memory_recall_count)
+                curated_memories = await _retriever.search(query=objective, source_type="curated_memory", top_k_final=settings.agent_memory_recall_count)
+                memories = sorted(raw_memories + curated_memories, key=lambda m: m.score, reverse=True)[:settings.agent_memory_recall_count]
                 if memories:
                     memory_text = "\n\n".join(f"- {m.content} (score: {m.score:.2f})" for m in memories)
                     system_prompt = system_prompt + f"\n\nRelevant past experience:\n{memory_text}"
@@ -341,5 +344,21 @@ async def execute_agent(
             )
     except Exception as e:
         logger.warning(f"Failed to persist agent memory: {e}")
+
+    # Extract curated facts
+    try:
+        from src.rag.memory import extract_and_store_memories
+        from src.tools.python.knowledge_search import _retriever
+        if _retriever and execution.result:
+            await extract_and_store_memories(
+                agent_name=agent_name,
+                objective=objective,
+                result=execution.result,
+                steps=execution.steps,
+                embedder=_retriever.embedder,
+                conversation_id=conversation_id,
+            )
+    except Exception as e:
+        logger.warning("Failed to extract curated memories: %s", e)
 
     return execution

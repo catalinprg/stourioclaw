@@ -113,6 +113,9 @@ class Settings(BaseSettings):
     mcp_client_timeout: int = 30
     mcp_stdio_allowed_commands: list[str] = []
 
+    # Document re-indexing
+    reindex_interval_seconds: int = 300
+
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
 
