@@ -198,30 +198,29 @@ class TestProcessTelegramUpdate:
     async def test_callback_query_approve(
         self, mock_orchestrator, mock_telegram_client
     ):
-        """Callback query with approve data -> acknowledged."""
+        """Callback query -> acknowledged with admin panel message (no approval action)."""
         with patch("src.telegram.webhook.settings") as mock_settings:
             mock_settings.telegram_allowed_user_ids = [111]
 
             result = await process_telegram_update(
                 _make_callback_update(data="approve:req_123", user_id=111)
             )
-            assert result is not None
-            assert "approved" in result
+            # Approvals now happen via admin panel, callback just acknowledges
+            assert result is None
             mock_telegram_client.answer_callback_query.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_callback_query_reject(
         self, mock_orchestrator, mock_telegram_client
     ):
-        """Callback query with reject data -> acknowledged."""
+        """Callback query -> acknowledged with admin panel message (no approval action)."""
         with patch("src.telegram.webhook.settings") as mock_settings:
             mock_settings.telegram_allowed_user_ids = [111]
 
             result = await process_telegram_update(
                 _make_callback_update(data="reject:req_456", user_id=111)
             )
-            assert result is not None
-            assert "rejected" in result
+            assert result is None
 
 
 # --- Formatter tests ---

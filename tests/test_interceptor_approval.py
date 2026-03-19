@@ -116,7 +116,7 @@ async def test_approved_tool_executes():
 
 @pytest.mark.asyncio
 async def test_intercepted_sends_telegram_notification():
-    """Intercepted tool sends Telegram notification with inline keyboard."""
+    """Intercepted tool sends Telegram notification (no buttons, admin panel only)."""
     registry = _make_registry_with_tool()
     interceptor = _make_mock_interceptor(
         intercepted=True, reason="sensitive data", severity="CRITICAL"
@@ -136,11 +136,8 @@ async def test_intercepted_sends_telegram_notification():
     tg_client.send_message.assert_awaited_once()
     call_kwargs = tg_client.send_message.call_args[1]
     assert call_kwargs["chat_id"] == 12345
-    assert "reply_markup" in call_kwargs
-    keyboard = call_kwargs["reply_markup"]["inline_keyboard"]
-    assert keyboard[0][0]["text"] == "Approve"
-    assert keyboard[0][1]["text"] == "Reject"
-    assert "appr-tg" in keyboard[0][0]["callback_data"]
+    assert "reply_markup" not in call_kwargs  # No buttons — approve via admin panel
+    assert "admin panel" in call_kwargs["text"].lower()
 
 
 @pytest.mark.asyncio
