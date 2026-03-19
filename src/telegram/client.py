@@ -5,7 +5,9 @@ from __future__ import annotations
 import httpx
 
 TELEGRAM_API_BASE = "https://api.telegram.org/bot"
+TELEGRAM_FILE_BASE = "https://api.telegram.org/file/bot"
 MAX_MESSAGE_LENGTH = 4096
+MAX_FILE_SIZE = 20 * 1024 * 1024  # 20 MB Telegram Bot API limit
 
 
 class TelegramClient:
@@ -92,6 +94,24 @@ class TelegramClient:
             remaining = remaining[split_at:].lstrip("\n")
 
         return chunks
+
+    async def get_file(self, file_id: str) -> dict:
+        """Call getFile API. Returns dict with file_path and file_size."""
+        resp = await self._http.post(
+            f"{self._base_url}/getFile",
+            json={"file_id": file_id},
+        )
+        resp.raise_for_status()
+        return resp.json()["result"]
+
+    async def download_file(self, file_path: str, file_size: int = 0) -> bytes:
+        """Download file bytes from Telegram. Raises ValueError if > 20 MB."""
+        if file_size > MAX_FILE_SIZE:
+            raise ValueError(f"File too large ({file_size} bytes, max {MAX_FILE_SIZE})")
+        file_url = f"{TELEGRAM_FILE_BASE}{self.token}/{file_path}"
+        resp = await self._http.get(file_url)
+        resp.raise_for_status()
+        return resp.content
 
     async def close(self) -> None:
         await self._http.aclose()
