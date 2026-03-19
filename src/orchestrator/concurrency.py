@@ -3,6 +3,7 @@ import logging
 from collections import defaultdict
 from src.agents.runtime import execute_agent
 from src.persistence import audit
+from src.persistence.database import async_session
 
 logger = logging.getLogger("stourio.orchestrator.concurrency")
 
@@ -28,6 +29,10 @@ class AgentPool:
         try:
             async with sem:
                 self._queued[agent_type] = max(0, self._queued[agent_type] - 1)
+                # Create session if not provided
+                if "session" not in kwargs:
+                    async with async_session() as session:
+                        return await execute_agent(agent_name=agent_type, session=session, **kwargs)
                 return await execute_agent(agent_name=agent_type, **kwargs)
         except Exception:
             self._queued[agent_type] = max(0, self._queued[agent_type] - 1)
