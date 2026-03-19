@@ -39,3 +39,72 @@ async def test_browser_pool_get_page():
     page = await pool.get_page()
     assert page is mock_page
     mock_browser.new_page.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_navigate_action():
+    from src.browser.actions import execute_action
+
+    mock_page = AsyncMock()
+    mock_page.title = AsyncMock(return_value="Example Domain")
+    mock_page.url = "https://example.com"
+
+    result = await execute_action(mock_page, "navigate", {"url": "https://example.com"})
+    assert result["status"] == "ok"
+    assert result["title"] == "Example Domain"
+    mock_page.goto.assert_called_once_with("https://example.com", wait_until="domcontentloaded")
+
+
+@pytest.mark.asyncio
+async def test_extract_text_action():
+    from src.browser.actions import execute_action
+
+    mock_page = AsyncMock()
+    mock_page.inner_text = AsyncMock(return_value="Hello world")
+
+    result = await execute_action(mock_page, "extract_text", {"selector": "body"})
+    assert result["status"] == "ok"
+    assert result["text"] == "Hello world"
+
+
+@pytest.mark.asyncio
+async def test_unknown_action_returns_error():
+    from src.browser.actions import execute_action
+
+    mock_page = AsyncMock()
+    result = await execute_action(mock_page, "fly_to_moon", {})
+    assert "error" in result
+
+
+@pytest.mark.asyncio
+async def test_click_action():
+    from src.browser.actions import execute_action
+
+    mock_page = AsyncMock()
+    result = await execute_action(mock_page, "click", {"selector": "#submit"})
+    assert result["status"] == "ok"
+    mock_page.click.assert_called_once_with("#submit")
+
+
+@pytest.mark.asyncio
+async def test_type_action():
+    from src.browser.actions import execute_action
+
+    mock_page = AsyncMock()
+    result = await execute_action(mock_page, "type", {"selector": "#email", "text": "test@example.com"})
+    assert result["status"] == "ok"
+    mock_page.fill.assert_called_once_with("#email", "test@example.com")
+
+
+@pytest.mark.asyncio
+async def test_screenshot_action():
+    from src.browser.actions import execute_action
+    import base64
+
+    mock_page = AsyncMock()
+    fake_bytes = b"fake-png-data"
+    mock_page.screenshot = AsyncMock(return_value=fake_bytes)
+
+    result = await execute_action(mock_page, "screenshot", {})
+    assert result["status"] == "ok"
+    assert result["base64"] == base64.b64encode(fake_bytes).decode()
