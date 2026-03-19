@@ -123,6 +123,10 @@ class AgentModel(Base):
     is_system = Column(Boolean, default=False)
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+    execution_mode = Column(String(20), server_default="oneshot")
+    daemon_config = Column(JSON, nullable=True)
+    mcp_servers = Column(JSON, default=list)
+    allowed_peers = Column(JSON, default=list)
 
 
 class SecurityAlertModel(Base):
@@ -154,6 +158,20 @@ class CronJobRecord(Base):
     next_run_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
+class McpServerRecord(Base):
+    __tablename__ = "mcp_servers"
+
+    id = Column(String, primary_key=True)
+    name = Column(String(100), unique=True, nullable=False)
+    endpoint_url = Column(String(500), nullable=True)
+    endpoint_command = Column(String(500), nullable=True)
+    transport = Column(String(20), nullable=False)
+    auth_env_var = Column(String(100), nullable=True)
+    high_risk_tools = Column(JSON, default=list)
+    active = Column(Boolean, default=True)
+    created_at = Column(DateTime, server_default=func.now())
 
 
 # --- Init ---
