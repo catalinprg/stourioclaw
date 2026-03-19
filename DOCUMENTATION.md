@@ -42,7 +42,6 @@ Complete reference for configuring and operating stourioclaw — a self-hosted A
 | **OpenAI** | Embeddings (`text-embedding-3-small`) + voice transcription (Whisper) | For RAG + voice | No |
 | **ElevenLabs** | Text-to-speech — voice message output | For TTS | Yes (limited) |
 | **Tavily** | Web search tool | For `web_search` | Yes (1000/month) |
-| **Cohere** | Result reranking for RAG | Optional (improves search quality) | Yes (limited) |
 
 ```
 OPENROUTER_API_KEY=        # Required
@@ -50,7 +49,6 @@ TELEGRAM_BOT_TOKEN=        # Required
 OPENAI_API_KEY=            # For embeddings + voice
 ELEVENLABS_API_KEY=        # For TTS
 SEARCH_API_KEY=            # Tavily
-COHERE_API_KEY=            # Reranking
 ```
 
 Plus any MCP server auth tokens you connect (e.g., `NOTION_MCP_TOKEN`, `GITHUB_TOKEN`) — those are per-integration, added as needed via `POST /api/mcp-servers`.
@@ -666,7 +664,7 @@ Requires `OPENAI_API_KEY` to be set.
 
 ### Querying
 
-Agents with the `search_knowledge` tool can search the knowledge base. Results are ranked by cosine similarity, optionally reranked by Cohere (if `COHERE_API_KEY` is set).
+Agents with the `search_knowledge` tool can search the knowledge base. Results use hybrid search — vector similarity (pgvector) combined with BM25 full-text search via reciprocal rank fusion.
 
 ### Agent Memory
 
@@ -884,7 +882,6 @@ Memory: Redis capped at 256MB (allkeys-lru). Chromium gets 2GB shared memory (`s
 |----------|---------|-------------|
 | `OPENAI_API_KEY` | - | For embeddings + voice transcription |
 | `EMBEDDING_MODEL` | `text-embedding-3-small` | Embedding model |
-| `COHERE_API_KEY` | - | For result reranking |
 
 ### Optional — Infrastructure
 
@@ -945,7 +942,7 @@ GET /api/usage/summary?group_by=agent_template
 GET /api/usage/summary?group_by=model
 ```
 
-Supported models for cost estimation: OpenAI (gpt-4o, gpt-4o-mini), Anthropic (claude-sonnet, claude-opus), Google Gemini, DeepSeek, Cohere.
+Supported models for cost estimation: OpenAI (gpt-4o, gpt-4o-mini), Anthropic (claude-sonnet, claude-opus), Google Gemini, DeepSeek.
 
 Set `COST_ALERT_DAILY_THRESHOLD` to get alerts when daily spend exceeds a threshold.
 

@@ -63,8 +63,6 @@ class Settings(BaseSettings):
 
     # --- RAG ---
     embedding_provider: str = "openai"
-    reranker_provider: str = "cohere"
-    cohere_api_key: str = ""
     runbooks_dir: str = "/app/docs"
 
     # --- Notifications ---

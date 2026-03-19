@@ -256,16 +256,12 @@ async def lifespan(app: FastAPI):
 
     # 5. Embeddings + RAG retriever
     from src.rag.embeddings.openai_embedder import OpenAIEmbedder
-    from src.rag.reranker.cohere_reranker import CohereReranker
     from src.rag.retriever import Retriever
     from src.mcp.tools.knowledge import set_retriever
 
     embedder = OpenAIEmbedder(api_key=settings.openai_api_key, model=settings.embedding_model)
     assert embedder.dimension == settings.embedding_dimension, "Embedder dimension mismatch"
-    reranker = None
-    if settings.reranker_provider == "cohere" and settings.cohere_api_key:
-        reranker = CohereReranker(api_key=settings.cohere_api_key)
-    retriever = Retriever(embedder=embedder, reranker=reranker)
+    retriever = Retriever(embedder=embedder)
     set_retriever(retriever)
 
     # 5b. Document re-indexing worker
