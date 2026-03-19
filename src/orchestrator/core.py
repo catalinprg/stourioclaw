@@ -296,6 +296,40 @@ async def _process_inner(signal: OrchestratorInput, span) -> dict:
                 "risk_level": risk_level.value,
             }
 
+        # Check if target agent is a daemon — route to inbox if running
+        async with get_session() as sess:
+            _reg = AgentRegistry(sess)
+            _target = await _reg.get_by_name(agent_type)
+
+        if _target and _target.execution_mode == "daemon":
+            from src.daemons.inbox import enqueue_message
+            from src.daemons.manager import get_daemon_manager
+
+            manager = get_daemon_manager()
+            daemon_running = manager is not None and manager.is_running(agent_type)
+
+            if daemon_running:
+                # Daemon is alive — enqueue to inbox, pub/sub wakes it
+                entry_id = await enqueue_message(
+                    target_agent=agent_type,
+                    message=args.get("objective", signal.content),
+                    from_agent="orchestrator",
+                    context=signal.content,
+                )
+                return {
+                    "status": "routed_to_daemon",
+                    "message": f"Message delivered to daemon '{agent_type}' inbox.",
+                    "agent_type": agent_type,
+                    "entry_id": entry_id,
+                }
+            else:
+                # Daemon not running — fall back to oneshot execution (no dead letters)
+                await audit.log(
+                    "DAEMON_FALLBACK",
+                    f"Daemon '{agent_type}' not running, executing as oneshot",
+                    input_id=signal.id,
+                )
+
         # Low/medium risk: execute immediately
         execution = await get_pool().execute(
             agent_type=agent_type,

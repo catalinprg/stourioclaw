@@ -157,3 +157,33 @@ async def get_cached_approval(approval_id: str) -> dict | None:
 async def delete_cached_approval(approval_id: str) -> None:
     r = await get_redis()
     await r.delete(f"{APPROVAL_PREFIX}{approval_id}")
+
+
+# --- Pub/Sub for Daemon Events ---
+
+DAEMON_EVENTS_CHANNEL = "stourio:daemon:events"
+INBOX_NOTIFY_PREFIX = "stourio:inbox_notify:"
+
+
+async def get_pubsub_connection():
+    """Get a pub/sub object from the Redis connection.
+
+    Note: The caller is responsible for subscribing to channels
+    and managing the pub/sub lifecycle.
+    """
+    r = await get_redis()
+    return r.pubsub()
+
+
+async def publish_daemon_event(event_type: str, agent_name: str) -> None:
+    """Publish a daemon control event (start/stop/restart)."""
+    r = await get_redis()
+    payload = json.dumps({"event": event_type, "agent": agent_name})
+    await r.publish(DAEMON_EVENTS_CHANNEL, payload)
+    logger.info("Published daemon event: %s -> %s", event_type, agent_name)
+
+
+async def notify_inbox(agent_name: str) -> None:
+    """Notify a daemon that it has a new inbox message via pub/sub."""
+    r = await get_redis()
+    await r.publish(f"{INBOX_NOTIFY_PREFIX}{agent_name}", "new_message")
