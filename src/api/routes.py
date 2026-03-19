@@ -619,7 +619,7 @@ async def update_alert_status(
     }
     alert.status = status_map[req.status]
     if req.status == "resolved":
-        alert.resolved_at = datetime.now(timezone.utc)
+        alert.resolved_at = datetime.utcnow()
     await session.commit()
     await audit.log("SECURITY_ALERT_UPDATED", f"Alert {alert_id} -> {alert.status}")
     return {"id": alert_id, "status": alert.status}
