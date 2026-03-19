@@ -15,6 +15,9 @@ class Settings(BaseSettings):
     embedding_model: str = "text-embedding-3-small"
     embedding_dimension: int = 1536
 
+    # --- Vision (for image analysis via OpenRouter) ---
+    vision_model: str = "openai/gpt-4o"
+
     # --- Security ---
     stourio_api_key: Optional[str] = None
     cors_origins: str = "http://localhost:3000,http://localhost:8000"
