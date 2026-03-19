@@ -1,4 +1,5 @@
 from __future__ import annotations
+import asyncio
 import logging
 from datetime import datetime, timedelta
 from sqlalchemy import select
@@ -175,3 +176,32 @@ async def get_pending_approvals() -> list[dict]:
             }
             for r in rows
         ]
+
+
+async def get_approval(approval_id: str) -> ApprovalRecord | None:
+    """Fetch an approval record by ID from the database."""
+    async with async_session() as session:
+        result = await session.execute(
+            select(ApprovalRecord).where(ApprovalRecord.id == approval_id)
+        )
+        return result.scalar_one_or_none()
+
+
+async def wait_for_resolution(
+    approval_id: str, timeout_seconds: int = 300
+) -> bool:
+    """Block until approval is resolved or TTL expires.
+
+    Returns True if approved, False if rejected/expired/timeout.
+    """
+    poll_interval = 2
+    elapsed = 0
+    while elapsed < timeout_seconds:
+        record = await get_approval(approval_id)
+        if record and record.status == "approved":
+            return True
+        if record and record.status in ("rejected", "expired"):
+            return False
+        await asyncio.sleep(poll_interval)
+        elapsed += poll_interval
+    return False

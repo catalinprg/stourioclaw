@@ -1,7 +1,7 @@
 """In-process MCP Tool Registry.
 
 Replaces the old gateway-based dispatch with direct function calls.
-Security interceptor integration (Task 23) will be added later.
+Security interceptor checks tool calls before execution (Task 23).
 """
 
 from __future__ import annotations
@@ -62,15 +62,118 @@ class ToolRegistry:
     ) -> dict:
         """Execute a registered tool by name.
 
-        Future: interceptor/approval check will go here (Task 23).
+        If a security interceptor is wired, checks the call first.
+        Intercepted calls require human approval via Telegram before proceeding.
         """
         tool = self.get(name)  # raises ValueError if missing
 
         if tool.execute_fn is None:
             raise ValueError(f"Tool '{name}' has no execute_fn defined.")
 
+        # --- Security interceptor gate ---
+        if self._interceptor is not None:
+            result = await self._interceptor.check_tool_call(
+                name, arguments, agent_name
+            )
+            if result.intercepted:
+                return await self._handle_intercepted(
+                    name, arguments, agent_name, result
+                )
+
         logger.info("Executing tool '%s' (agent=%s)", name, agent_name)
         return await tool.execute_fn(arguments)
+
+    async def _handle_intercepted(
+        self, name: str, arguments: dict, agent_name: str, result
+    ) -> dict:
+        """Create approval request, notify via Telegram, wait for resolution."""
+        from src.config import settings
+        from src.models.schemas import RiskLevel
+
+        severity_to_risk = {
+            "LOW": RiskLevel.LOW,
+            "MEDIUM": RiskLevel.MEDIUM,
+            "HIGH": RiskLevel.HIGH,
+            "CRITICAL": RiskLevel.CRITICAL,
+        }
+        risk = severity_to_risk.get(result.severity, RiskLevel.HIGH)
+
+        action_desc = (
+            f"Tool '{name}' called by agent '{agent_name}': {result.reason}"
+        )
+
+        # Use the approval handler if wired, otherwise fall back to module-level fn
+        if self._approval_handler is not None:
+            approval = await self._approval_handler.create_approval(
+                action_description=action_desc,
+                risk_level=risk,
+            )
+        else:
+            from src.guardrails.approvals import create_approval_request
+            approval = await create_approval_request(
+                action_description=action_desc,
+                risk_level=risk,
+            )
+
+        logger.warning(
+            "Tool '%s' intercepted (agent=%s, severity=%s, approval=%s): %s",
+            name, agent_name, result.severity, approval.id, result.reason,
+        )
+
+        # Send Telegram notification with inline approve/reject buttons
+        if self._telegram_client is not None:
+            try:
+                chat_ids = settings.telegram_allowed_user_ids
+                reply_markup = {
+                    "inline_keyboard": [
+                        [
+                            {"text": "Approve", "callback_data": f"approve:{approval.id}"},
+                            {"text": "Reject", "callback_data": f"reject:{approval.id}"},
+                        ]
+                    ]
+                }
+                msg = (
+                    f"*Approval Required*\n\n"
+                    f"Tool: `{name}`\n"
+                    f"Agent: `{agent_name}`\n"
+                    f"Risk: *{result.severity}*\n"
+                    f"Reason: {result.reason}\n\n"
+                    f"ID: `{approval.id}`"
+                )
+                for cid in chat_ids:
+                    await self._telegram_client.send_message(
+                        chat_id=cid, text=msg, reply_markup=reply_markup
+                    )
+            except Exception as exc:
+                logger.error("Failed to send Telegram approval notification: %s", exc)
+
+        # Wait for human decision
+        timeout = settings.approval_ttl_seconds
+        if self._approval_handler is not None:
+            approved = await self._approval_handler.wait_for_resolution(
+                approval.id, timeout_seconds=timeout
+            )
+        else:
+            from src.guardrails.approvals import wait_for_resolution
+            approved = await wait_for_resolution(
+                approval.id, timeout_seconds=timeout
+            )
+
+        if not approved:
+            logger.warning(
+                "Tool '%s' blocked: approval %s rejected/expired", name, approval.id
+            )
+            return {
+                "blocked": True,
+                "reason": result.reason,
+                "approval_id": approval.id,
+            }
+
+        # Approved — proceed with execution
+        logger.info(
+            "Tool '%s' approved (approval=%s), executing", name, approval.id
+        )
+        return await self.get(name).execute_fn(arguments)
 
     # ------------------------------------------------------------------
     # LLM integration
@@ -91,11 +194,11 @@ class ToolRegistry:
         ]
 
     # ------------------------------------------------------------------
-    # Interceptor (placeholder for Task 23)
+    # Interceptor wiring
     # ------------------------------------------------------------------
 
-    def set_interceptor(self, interceptor, approval_handler, telegram_client) -> None:
-        """Wire up security interceptor. Implementation in Task 23."""
+    def set_interceptor(self, interceptor, approval_handler=None, telegram_client=None) -> None:
+        """Wire up security interceptor for pre-execution checks."""
         self._interceptor = interceptor
         self._approval_handler = approval_handler
         self._telegram_client = telegram_client
