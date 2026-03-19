@@ -16,7 +16,7 @@ from src.models.schemas import (
     ApprovalDecision, Rule, new_id,
 )
 from src.persistence import audit
-from src.persistence.database import get_session, SecurityAlertModel, McpServerRecord
+from src.persistence.database import get_session, SecurityAlertModel, McpServerRecord, async_session as db_async_session
 from src.mcp.client import get_mcp_client_pool
 from src.persistence.redis_store import (
     activate_kill_switch, deactivate_kill_switch, is_killed, enqueue_signal,
@@ -175,6 +175,26 @@ async def delete_rule(rule_id: str):
 async def status():
     killed = await is_killed()
     approvals = await get_pending_approvals()
+
+    # Daemon status
+    daemon_status = {}
+    try:
+        async with db_async_session() as sess:
+            registry = AgentRegistry(sess)
+            daemons = await registry.list_daemons()
+            daemon_status = {d.name: {"execution_mode": "daemon", "active": d.is_active} for d in daemons}
+    except Exception:
+        pass
+
+    # MCP server status
+    mcp_status = {}
+    try:
+        pool = get_mcp_client_pool()
+        for name in pool._connections:
+            mcp_status[name] = {"connected": True, "tools_count": len(pool.get_tools(name))}
+    except Exception:
+        pass
+
     return {
         "status": "killed" if killed else "operational",
         "kill_switch": killed,
@@ -182,6 +202,8 @@ async def status():
         "agents": [t.model_dump() for t in list_templates()],
         "workflows": [w.model_dump() for w in list_workflows()],
         "agent_pool": get_pool().status(),
+        "daemons": daemon_status,
+        "mcp_servers": mcp_status,
     }
 
 
