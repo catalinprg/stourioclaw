@@ -158,17 +158,17 @@ Daemons wake on: inbox messages (instant via pub/sub) or tick interval (heartbea
 
 ## Inter-Agent Messaging
 
-Agents can send async messages to each other via inbox streams. Messaging is disabled by default — enable per agent via `allowed_peers`:
+Agents can send async messages to each other via inbox streams. Messaging is open by default — all agents can message all others. To restrict a specific agent, set `allowed_peers`:
 
 ```bash
-# Allow "analyst" to message "watchdog"
+# Only allow "monitor" to message "watchdog"
 curl -X PUT http://localhost:8000/api/agents/watchdog \
   -H "X-STOURIO-KEY: your-key" \
   -H "Content-Type: application/json" \
-  -d '{"allowed_peers": ["analyst"]}'
+  -d '{"allowed_peers": ["monitor"]}'
 ```
 
-Messages to running daemons wake them immediately. Messages to non-running agents trigger a oneshot execution.
+Empty `allowed_peers` (default) = accept from everyone. Messages to running daemons wake them immediately. Messages to non-running agents trigger a oneshot execution.
 
 ## MCP Client — External Tool Servers
 

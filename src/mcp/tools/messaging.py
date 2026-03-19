@@ -16,7 +16,11 @@ logger = logging.getLogger("stourio.tools.messaging")
 
 
 async def _check_peer_allowed(from_agent: str, target_agent: str) -> bool:
-    """Check if from_agent is in target_agent's allowed_peers list."""
+    """Check if from_agent is allowed to message target_agent.
+
+    If allowed_peers is empty, all agents can message (open by default).
+    If allowed_peers is set, only listed agents can message (restricted mode).
+    """
     async with async_session() as session:
         result = await session.execute(
             select(AgentModel).where(AgentModel.name == target_agent)
@@ -25,6 +29,8 @@ async def _check_peer_allowed(from_agent: str, target_agent: str) -> bool:
         if not agent:
             return False
         peers = agent.allowed_peers or []
+        if not peers:
+            return True  # Empty list = allow all
         return from_agent in peers
 
 
