@@ -11,6 +11,7 @@ from fastapi.responses import JSONResponse
 from src.config import settings
 from src.models.schemas import OrchestratorInput, SignalSource
 from src.telegram.formatter import to_telegram_markdown
+from src.telegram.media import transcribe_voice, describe_image
 
 logger = logging.getLogger(__name__)
 
@@ -85,7 +86,8 @@ async def process_telegram_update(update: dict) -> Optional[str]:
     if callback_query:
         return await _handle_callback_query(callback_query, chat_id)
 
-    text = message.get("text", "")
+    # 4b. Extract content — voice, photo, or text
+    text = await _extract_message_content(message)
     if not text:
         return None
 
@@ -124,6 +126,54 @@ async def process_telegram_update(update: dict) -> Optional[str]:
         await _telegram_client.send_message(chat_id=chat_id, text=formatted)
 
     return response_text
+
+
+async def _extract_message_content(message: dict) -> Optional[str]:
+    """Extract text content from message. Handles voice, photo, and plain text."""
+    # Voice message
+    voice = message.get("voice")
+    if voice and _telegram_client:
+        file_id = voice["file_id"]
+        file_size = voice.get("file_size", 0)
+        try:
+            file_info = await _telegram_client.get_file(file_id)
+            audio_bytes = await _telegram_client.download_file(
+                file_info["file_path"], file_size=file_size
+            )
+            return await transcribe_voice(audio_bytes, api_key=settings.openai_api_key or "")
+        except ValueError as e:
+            return f"[Error: {e}]"
+        except Exception as e:
+            logger.error("Voice processing failed: %s", e)
+            return "[Voice processing failed]"
+
+    # Photo message
+    photos = message.get("photo")
+    if photos and _telegram_client:
+        largest = max(photos, key=lambda p: p.get("file_size", 0))
+        file_id = largest["file_id"]
+        file_size = largest.get("file_size", 0)
+        caption = message.get("caption")
+        try:
+            file_info = await _telegram_client.get_file(file_id)
+            image_bytes = await _telegram_client.download_file(
+                file_info["file_path"], file_size=file_size
+            )
+            description = await describe_image(
+                image_bytes,
+                api_key=settings.openrouter_api_key,
+                model=settings.vision_model,
+                caption=caption,
+            )
+            return f"[Image analysis] {description}"
+        except ValueError as e:
+            return f"[Error: {e}]"
+        except Exception as e:
+            logger.error("Image processing failed: %s", e)
+            return "[Image processing failed]"
+
+    # Plain text
+    return message.get("text", "")
 
 
 async def _handle_callback_query(callback_query: dict, chat_id: int) -> Optional[str]:
