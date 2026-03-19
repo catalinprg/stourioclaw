@@ -2,22 +2,24 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# Install system deps: Docker CLI for sandboxed code execution
+# Install system deps: Docker CLI + Playwright browser dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates curl gnupg && \
     install -m 0755 -d /etc/apt/keyrings && \
     curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc && \
     chmod a+r /etc/apt/keyrings/docker.asc && \
     echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian $(. /etc/os-release && echo "$VERSION_CODENAME") stable" > /etc/apt/sources.list.d/docker.list && \
-    apt-get update && apt-get install -y --no-install-recommends docker-ce-cli && \
-    apt-get clean && rm -rf /var/lib/apt/lists/*
+    apt-get update && apt-get install -y --no-install-recommends docker-ce-cli
 
 # Install Python dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Install Playwright browsers (Chromium only to keep image small)
-RUN pip install playwright && playwright install chromium && playwright install-deps chromium
+# Install Playwright + Chromium (must happen before apt cleanup, needs system libs)
+RUN pip install playwright && \
+    playwright install chromium && \
+    playwright install-deps chromium && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Copy source
 COPY . .
