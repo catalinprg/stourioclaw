@@ -24,6 +24,7 @@ def register_all_tools() -> None:
     from src.mcp.tools.delegate import delegate_to_agent
     from src.mcp.tools.browser import browser_action
     from src.mcp.tools.messaging import send_message, read_messages, heartbeat_ack
+    from src.mcp.tools.tts import text_to_speech
 
     # --- web_search ---
     register_tool(
@@ -395,5 +396,26 @@ def register_all_tools() -> None:
             "properties": {},
         },
     )(heartbeat_ack)
+
+    # --- text_to_speech ---
+    register_tool(
+        registry=tool_registry,
+        name="text_to_speech",
+        description="Convert text to speech and send as a voice message via Telegram. Use when the user asks you to speak, read aloud, or when a voice response would be more appropriate.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "text": {
+                    "type": "string",
+                    "description": "Text to convert to speech (max 5000 characters)",
+                },
+                "voice_id": {
+                    "type": "string",
+                    "description": "ElevenLabs voice ID (optional, uses default voice)",
+                },
+            },
+            "required": ["text"],
+        },
+    )(text_to_speech)
 
     logger.info("Registered %d MCP tools", len(tool_registry.list_tools()))

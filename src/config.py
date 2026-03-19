@@ -113,6 +113,11 @@ class Settings(BaseSettings):
     mcp_client_timeout: int = 30
     mcp_stdio_allowed_commands: list[str] = []
 
+    # Text-to-Speech (ElevenLabs)
+    elevenlabs_api_key: str = ""
+    elevenlabs_voice_id: str = "21m00Tcm4TlvDq8ikWAM"  # Default: Rachel
+    elevenlabs_model: str = "eleven_monolingual_v1"
+
     # Document re-indexing
     reindex_interval_seconds: int = 300
 

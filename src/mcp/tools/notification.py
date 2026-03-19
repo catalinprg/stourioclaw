@@ -10,6 +10,16 @@ _telegram_client = None
 _allowed_user_ids: list[int] = []
 
 
+def get_telegram_client():
+    """Return the wired Telegram client, or None if not configured."""
+    return _telegram_client
+
+
+def get_allowed_user_ids() -> list[int]:
+    """Return the list of allowed Telegram user IDs."""
+    return _allowed_user_ids
+
+
 def set_telegram_client(client, allowed_user_ids: list[int]):
     """Wire the Telegram bot client and allowed recipients. Called during app startup."""
     global _telegram_client, _allowed_user_ids
