@@ -89,6 +89,13 @@ def _validate_env():
     if not settings.telegram_webhook_url and not settings.telegram_use_polling:
         warnings.append("TELEGRAM_WEBHOOK_URL (required unless TELEGRAM_USE_POLLING=true)")
 
+    # Check for default passwords in production
+    if not settings.telegram_use_polling:  # Production mode (webhook)
+        if settings.postgres_password == "changeme":
+            missing.append("POSTGRES_PASSWORD (still set to 'changeme')")
+        if settings.redis_password == "changeme":
+            missing.append("REDIS_PASSWORD (still set to 'changeme')")
+
     if missing:
         msg = (
             "\n\n"

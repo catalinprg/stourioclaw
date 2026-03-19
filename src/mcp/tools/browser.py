@@ -6,6 +6,7 @@ navigate -> click -> type -> screenshot.
 """
 from __future__ import annotations
 
+import ipaddress
 import logging
 from urllib.parse import urlparse
 
@@ -15,6 +16,22 @@ logger = logging.getLogger("stourio.tools.browser")
 
 # Page cache keyed by session_id — allows multi-step browser workflows
 _page_cache: dict[str, object] = {}
+
+
+def _is_url_safe_network(url: str) -> bool:
+    """Block navigation to internal/private network addresses."""
+    parsed = urlparse(url)
+    hostname = parsed.hostname or ""
+    blocked_hosts = {"localhost", "postgres", "redis", "jaeger", "0.0.0.0", "127.0.0.1"}
+    if hostname in blocked_hosts:
+        return False
+    try:
+        ip = ipaddress.ip_address(hostname)
+        if ip.is_private or ip.is_loopback or ip.is_link_local:
+            return False
+    except ValueError:
+        pass
+    return True
 
 
 def _is_domain_allowed(url: str) -> bool:
@@ -73,6 +90,8 @@ async def browser_action(arguments: dict) -> dict:
                 "error": f"URL '{url}' is not in allowed domains. "
                          f"Allowed: {settings.browser_allowed_domains}",
             }
+        if not _is_url_safe_network(url):
+            return {"error": f"URL blocked: '{url}' targets an internal network address"}
 
     try:
         from src.browser.engine import get_browser_pool

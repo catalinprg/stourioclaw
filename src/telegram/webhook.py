@@ -34,7 +34,7 @@ async def telegram_webhook(request: Request):
     """Receive Telegram update, verify secret, dispatch to processing."""
     # 1. Verify X-Telegram-Bot-Api-Secret-Token header
     secret = request.headers.get("X-Telegram-Bot-Api-Secret-Token", "")
-    if secret != settings.telegram_webhook_secret:
+    if not settings.telegram_webhook_secret or secret != settings.telegram_webhook_secret:
         return JSONResponse(status_code=403, content={"error": "forbidden"})
 
     # 2. Parse update JSON

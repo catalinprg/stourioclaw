@@ -17,10 +17,10 @@ def _get_workspace_dir() -> str:
 
 
 def _safe_path(path: str) -> str:
-    """Resolve *path* inside the workspace, blocking traversal."""
+    """Resolve *path* inside the workspace, blocking traversal and symlinks."""
     workspace = WORKSPACE_DIR or _get_workspace_dir()
-    resolved = os.path.normpath(os.path.join(workspace, path))
-    if not resolved.startswith(os.path.normpath(workspace)):
+    resolved = os.path.realpath(os.path.join(workspace, path))
+    if not resolved.startswith(os.path.realpath(workspace)):
         raise ValueError(f"Path traversal blocked: {path}")
     return resolved
 
