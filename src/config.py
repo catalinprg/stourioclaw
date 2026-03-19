@@ -93,6 +93,11 @@ class Settings(BaseSettings):
     agent_concurrency_default: int = 3
     agent_concurrency_config: dict = {}
 
+    # Browser automation
+    browser_headless: bool = True
+    browser_timeout_ms: int = 30000
+    browser_allowed_domains: list[str] = []
+
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
 

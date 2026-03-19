@@ -22,6 +22,7 @@ def register_all_tools() -> None:
     from src.mcp.tools.notification import send_notification
     from src.mcp.tools.report import generate_report
     from src.mcp.tools.delegate import delegate_to_agent
+    from src.mcp.tools.browser import browser_action
 
     # --- web_search ---
     register_tool(
@@ -296,5 +297,49 @@ def register_all_tools() -> None:
             "required": ["agent_type", "objective"],
         },
     )(delegate_to_agent)
+
+    # --- browser_action ---
+    register_tool(
+        registry=tool_registry,
+        name="browser_action",
+        description="Interact with web pages: navigate, click, type text, take screenshots, extract text. Use for web automation tasks.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "enum": ["navigate", "click", "type", "screenshot", "extract_text", "get_url", "close_session"],
+                    "description": "The browser action to perform",
+                },
+                "session_id": {
+                    "type": "string",
+                    "description": "Reuse an existing browser session for multi-step workflows. Returned in previous action results.",
+                },
+                "url": {
+                    "type": "string",
+                    "description": "URL to navigate to (required for navigate action)",
+                },
+                "selector": {
+                    "type": "string",
+                    "description": "CSS selector for click, type, or extract_text actions",
+                },
+                "text": {
+                    "type": "string",
+                    "description": "Text to type (required for type action)",
+                },
+                "full_page": {
+                    "type": "boolean",
+                    "description": "Capture full page screenshot (default false)",
+                    "default": False,
+                },
+                "max_length": {
+                    "type": "integer",
+                    "description": "Max text length for extract_text (default 10000)",
+                    "default": 10000,
+                },
+            },
+            "required": ["action"],
+        },
+    )(browser_action)
 
     logger.info("Registered %d MCP tools", len(tool_registry.list_tools()))

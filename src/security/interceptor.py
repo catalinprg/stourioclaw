@@ -4,7 +4,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, Dict, Optional
 
-HIGH_RISK_TOOLS = {"write_file", "execute_code"}
+HIGH_RISK_TOOLS = {"write_file", "execute_code", "browser_action"}
 EXTERNAL_RISK_TOOLS = {"call_api", "send_notification", "delegate_to_agent"}
 SENSITIVE_PATTERNS = [
     re.compile(r"api[_-]?key", re.IGNORECASE),

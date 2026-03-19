@@ -108,3 +108,25 @@ async def test_screenshot_action():
     result = await execute_action(mock_page, "screenshot", {})
     assert result["status"] == "ok"
     assert result["base64"] == base64.b64encode(fake_bytes).decode()
+
+
+@pytest.mark.asyncio
+async def test_browser_action_tool_rejects_disallowed_domain():
+    from src.mcp.tools.browser import browser_action
+
+    with patch("src.mcp.tools.browser.settings") as mock_settings:
+        mock_settings.browser_allowed_domains = ["example.com", "docs.python.org"]
+        result = await browser_action({
+            "action": "navigate",
+            "url": "https://evil.com/steal",
+        })
+        assert "error" in result
+        assert "not in allowed domains" in result["error"]
+
+
+@pytest.mark.asyncio
+async def test_browser_action_tool_missing_action():
+    from src.mcp.tools.browser import browser_action
+
+    result = await browser_action({"url": "https://example.com"})
+    assert "error" in result
