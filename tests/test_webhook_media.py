@@ -10,10 +10,7 @@ from src.telegram.webhook import process_telegram_update, init_telegram_handler
 @pytest.fixture
 def mock_orchestrator():
     orch = AsyncMock()
-    result = MagicMock()
-    result.text_response = "Got it"
-    result.result = None
-    orch.process.return_value = result
+    orch.process.return_value = {"status": "completed", "message": "Got it"}
     return orch
 
 

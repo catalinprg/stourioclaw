@@ -32,10 +32,7 @@ def client(app):
 @pytest.fixture
 def mock_orchestrator():
     orch = AsyncMock()
-    result = MagicMock()
-    result.text_response = "Orchestrator says hello"
-    result.result = None
-    orch.process.return_value = result
+    orch.process.return_value = {"status": "completed", "message": "Orchestrator says hello"}
     return orch
 
 

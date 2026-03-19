@@ -114,10 +114,8 @@ async def process_telegram_update(update: dict) -> Optional[str]:
 
     # 8. Send response back via Telegram
     response_text = None
-    if hasattr(result, "text_response") and result.text_response:
-        response_text = result.text_response
-    elif hasattr(result, "result") and result.result:
-        response_text = result.result
+    if isinstance(result, dict):
+        response_text = result.get("message")
     elif isinstance(result, str):
         response_text = result
 
