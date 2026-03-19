@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import ipaddress
 import logging
+import socket
 import time
 from urllib.parse import urlparse
 
@@ -23,17 +24,28 @@ MAX_SESSIONS = 20
 
 
 def _is_url_safe_network(url: str) -> bool:
-    """Block navigation to internal/private network addresses."""
+    """Block navigation to internal/private network addresses.
+
+    Resolves DNS names to IPs before checking to prevent DNS rebinding attacks.
+    """
     parsed = urlparse(url)
     hostname = parsed.hostname or ""
     blocked_hosts = {"localhost", "postgres", "redis", "jaeger", "0.0.0.0", "127.0.0.1"}
     if hostname in blocked_hosts:
         return False
+    # Resolve DNS to IP and check resolved address
     try:
-        ip = ipaddress.ip_address(hostname)
-        if ip.is_private or ip.is_loopback or ip.is_link_local:
-            return False
-    except ValueError:
+        results = socket.getaddrinfo(hostname, None, socket.AF_UNSPEC, socket.SOCK_STREAM)
+        for family, _, _, _, sockaddr in results:
+            ip_str = sockaddr[0]
+            try:
+                ip = ipaddress.ip_address(ip_str)
+                if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
+                    logger.warning("SSRF blocked: %s resolves to private IP %s", hostname, ip_str)
+                    return False
+            except ValueError:
+                pass
+    except socket.gaierror:
         pass
     return True
 

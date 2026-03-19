@@ -24,7 +24,7 @@ RATE_LIMITS = {
     "/api/rules": 30,
     "/api/audit": 30,
     "/api/status": 60,
-    "/telegram/webhook": 10,  # Telegram webhook, low limit to prevent flooding
+    "/api/telegram/webhook": 10,  # Telegram webhook, low limit to prevent flooding
 }
 DEFAULT_LIMIT = 60  # requests per minute
 
