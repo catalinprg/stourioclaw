@@ -13,6 +13,7 @@ from src.config import settings
 from src.persistence import redis_store
 from src.orchestrator import core as orchestrator_module
 from src.scheduler.worker import run_scheduler_loop
+from src.browser.engine import shutdown_browser_pool
 from src.models.schemas import OrchestratorInput, SignalSource, WebhookSignal
 from src.telemetry import setup_tracing
 
@@ -262,6 +263,9 @@ async def lifespan(app: FastAPI):
             await task
         except asyncio.CancelledError:
             pass
+
+    # Cleanup browser pool
+    await shutdown_browser_pool()
 
     # Cleanup Telegram client
     if telegram_client:
