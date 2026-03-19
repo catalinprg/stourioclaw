@@ -46,6 +46,20 @@ async def scheduler_tick(store: CronStore, session_factory) -> int:
                 f"Cron job '{job.name}' completed: status={execution.status.value}",
             )
 
+            # Deliver result via Telegram
+            if execution.result:
+                try:
+                    from src.mcp.tools.notification import get_telegram_client, get_allowed_user_ids
+                    tg = get_telegram_client()
+                    if tg:
+                        for cid in get_allowed_user_ids():
+                            await tg.send_message(
+                                chat_id=cid,
+                                text=f"[Cron: {job.name}]\n\n{execution.result}",
+                            )
+                except Exception as e:
+                    logger.warning("Failed to deliver cron result via Telegram: %s", e)
+
             await store.mark_executed(job)
             fired += 1
 

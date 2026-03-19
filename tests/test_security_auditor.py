@@ -36,8 +36,9 @@ def auditor(mock_session):
 
 @pytest.mark.asyncio
 async def test_auditor_detects_high_frequency(auditor):
-    """50 actions from one agent should trigger a HIGH_FREQUENCY alert."""
-    entries = [_make_entry("agent-spam") for _ in range(50)]
+    """Actions above FREQUENCY_THRESHOLD should trigger a HIGH_FREQUENCY alert."""
+    count = FREQUENCY_THRESHOLD + 1
+    entries = [_make_entry("agent-spam") for _ in range(count)]
 
     alerts = await auditor.analyze_recent_activity(entries)
 
@@ -46,7 +47,7 @@ async def test_auditor_detects_high_frequency(auditor):
     assert len(freq_alerts) == 1
     assert freq_alerts[0].severity == "HIGH"
     assert freq_alerts[0].source_agent == "agent-spam"
-    assert freq_alerts[0].raw_evidence["action_count"] == 50
+    assert freq_alerts[0].raw_evidence["action_count"] == count
 
 
 @pytest.mark.asyncio
@@ -63,7 +64,8 @@ async def test_auditor_no_alert_below_threshold(auditor):
 @pytest.mark.asyncio
 async def test_auditor_detects_repeated_failures(auditor):
     """More than ERROR_THRESHOLD error actions should trigger REPEATED_FAILURES alert."""
-    entries = [_make_entry("agent-broken", action="error_occurred") for _ in range(15)]
+    count = ERROR_THRESHOLD + 1
+    entries = [_make_entry("agent-broken", action="error_occurred") for _ in range(count)]
 
     alerts = await auditor.analyze_recent_activity(entries)
 
@@ -71,13 +73,14 @@ async def test_auditor_detects_repeated_failures(auditor):
     assert len(failure_alerts) == 1
     assert failure_alerts[0].severity == "MEDIUM"
     assert failure_alerts[0].source_agent == "agent-broken"
-    assert failure_alerts[0].raw_evidence["error_count"] == 15
+    assert failure_alerts[0].raw_evidence["error_count"] == count
 
 
 @pytest.mark.asyncio
 async def test_auditor_detects_failures_via_risk_level(auditor):
     """High/critical risk_level entries count as errors."""
-    entries = [_make_entry("agent-risky", action="tool_call", risk_level="high") for _ in range(12)]
+    count = ERROR_THRESHOLD + 1
+    entries = [_make_entry("agent-risky", action="tool_call", risk_level="high") for _ in range(count)]
 
     alerts = await auditor.analyze_recent_activity(entries)
 
@@ -100,7 +103,7 @@ async def test_auditor_no_failure_alert_below_threshold(auditor):
 async def test_auditor_multiple_agents_independent(auditor):
     """Each agent is evaluated independently."""
     entries = (
-        [_make_entry("agent-a") for _ in range(50)]
+        [_make_entry("agent-a") for _ in range(FREQUENCY_THRESHOLD + 1)]
         + [_make_entry("agent-b") for _ in range(10)]
     )
 
@@ -121,7 +124,8 @@ async def test_auditor_empty_entries(auditor):
 @pytest.mark.asyncio
 async def test_auditor_both_alerts_simultaneously(auditor):
     """An agent can trigger both HIGH_FREQUENCY and REPEATED_FAILURES."""
-    entries = [_make_entry("agent-chaos", action="fail_something") for _ in range(50)]
+    count = max(FREQUENCY_THRESHOLD, ERROR_THRESHOLD) + 1
+    entries = [_make_entry("agent-chaos", action="fail_something") for _ in range(count)]
 
     alerts = await auditor.analyze_recent_activity(entries)
 
