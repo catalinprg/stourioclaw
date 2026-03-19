@@ -6,16 +6,14 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from src.api.routes import router
 from src.api.rate_limit import RateLimitMiddleware
-from src.persistence.database import init_db
+from src.persistence.database import init_db, async_session
 from src.rules.engine import seed_default_rules
 from src.plugins.registry import init_registry
 from src.config import settings
 from src.persistence import redis_store
-from src.orchestrator.core import process
+from src.orchestrator import core as orchestrator_module
 from src.orchestrator.chains import load_chains
-from src.agents.runtime import load_agent_templates
 from src.models.schemas import OrchestratorInput, SignalSource, WebhookSignal
-from src.adapters.registry import init_cached_adapters
 from src.telemetry import setup_tracing
 
 logging.basicConfig(
@@ -42,19 +40,19 @@ async def signal_consumer_worker():
                 content = f"[{sig_model.source.upper()}] {sig_model.event_type}: {sig_model.title}"
                 if sig_model.payload:
                     content += f"\nPayload: {sig_model.payload}"
-                
+
                 orchestrator_input = OrchestratorInput(
                     source=SignalSource.SYSTEM,
                     content=content,
                     raw_signal=sig_model,
                 )
-                
+
                 # Process signal through orchestrator
-                await process(orchestrator_input)
-                
+                await orchestrator_module.process(orchestrator_input)
+
                 # Acknowledge ONLY after successful processing to prevent signal loss
                 await redis_store.ack_signal(msg_id)
-                
+
         except asyncio.CancelledError:
             logger.info("Signal consumer worker cancelled.")
             break
@@ -101,6 +99,37 @@ async def approval_escalation_worker():
         await asyncio.sleep(10)
 
 
+async def security_auditor_worker():
+    """Periodic background worker that scans audit logs for anomalies."""
+    from src.security.auditor import SecurityAuditor
+    from src.mcp.tools.audit import read_audit_log
+
+    interval = settings.security_audit_interval_seconds
+    logger.info("Security auditor worker started (interval=%ds)", interval)
+
+    while True:
+        try:
+            await asyncio.sleep(interval)
+            # Fetch recent audit entries via the audit tool
+            result = await read_audit_log({"hours": 1, "limit": 200})
+            entries = result.get("entries", [])
+            if not entries:
+                continue
+
+            async with async_session() as session:
+                auditor = SecurityAuditor(session=session, interval_seconds=interval)
+                alerts = await auditor.analyze_recent_activity(entries)
+                if alerts:
+                    await auditor.save_alerts(alerts)
+                    logger.warning("Security auditor raised %d alert(s)", len(alerts))
+        except asyncio.CancelledError:
+            logger.info("Security auditor worker cancelled.")
+            break
+        except Exception as e:
+            logger.error(f"Security auditor worker error: {e}")
+            await asyncio.sleep(interval)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup and shutdown."""
@@ -111,15 +140,26 @@ async def lifespan(app: FastAPI):
     # 2. Redis consumer group
     await redis_store.init_consumer_group()
 
-    # 3. Plugin system
+    # 3. Plugin system + MCP tool registry
     init_registry()
 
-    # 4. RAG pipeline
+    from src.mcp.tools import register_all_tools
+    register_all_tools()
+
+    # 4. Agent seed from YAML
+    from src.agents.registry import AgentRegistry
+    async with async_session() as session:
+        registry = AgentRegistry(session)
+        count = await registry.seed_from_yaml("config/agents")
+        await session.commit()
+    if count:
+        logger.info("Seeded %d agent(s) from YAML", count)
+
+    # 5. Embeddings + RAG retriever
     from src.rag.embeddings.openai_embedder import OpenAIEmbedder
     from src.rag.reranker.cohere_reranker import CohereReranker
     from src.rag.retriever import Retriever
-    from src.rag.ingestion import ingest_runbooks
-    from src.tools.python.knowledge_search import set_retriever
+    from src.mcp.tools.knowledge import set_retriever
 
     embedder = OpenAIEmbedder(api_key=settings.openai_api_key, model=settings.embedding_model)
     assert embedder.dimension == settings.embedding_dimension, "Embedder dimension mismatch"
@@ -128,30 +168,35 @@ async def lifespan(app: FastAPI):
         reranker = CohereReranker(api_key=settings.cohere_api_key)
     retriever = Retriever(embedder=embedder, reranker=reranker)
     set_retriever(retriever)
-    count = await ingest_runbooks(embedder)
-    logger.info(f"Ingested {count} runbook chunks")
 
-    # 5. Chain definitions
+    # 6. Chain definitions
     load_chains(settings.chains_config_path)
 
-    # 6. Agent templates (YAML overrides loaded after plugin registry is ready)
-    loaded_templates = load_agent_templates(settings.agent_templates_dir)
-    import src.agents.runtime as _runtime_mod
-    _runtime_mod.AGENT_TEMPLATES.update(loaded_templates)
+    # 7. Wire placeholder tools
+    from src.mcp.tools.audit import set_session_factory
+    from src.mcp.tools.notification import set_telegram_client
+    set_session_factory(async_session)
 
-    # 7. Wrap orchestrator adapter with LLM response cache (requires Redis to be ready)
-    await init_cached_adapters()
+    # 8. Telegram client init + webhook registration
+    from src.telegram.client import TelegramClient
+    from src.telegram.webhook import init_telegram_handler
 
-    # Startup banner (after templates are loaded)
+    telegram_client = None
+    if settings.telegram_bot_token:
+        telegram_client = TelegramClient(token=settings.telegram_bot_token)
+        init_telegram_handler(orchestrator_module, telegram_client)
+        set_telegram_client(telegram_client, settings.telegram_allowed_user_ids)
+        if not settings.telegram_use_polling:
+            await telegram_client.set_webhook(
+                settings.telegram_webhook_url, settings.telegram_webhook_secret
+            )
+        logger.info("Telegram bot initialized (polling=%s)", settings.telegram_use_polling)
+
+    # Startup banner
     logger.info("=" * 60)
     logger.info("STOURIO - Operational Intelligence Framework")
-    logger.info(f"Orchestrator: {settings.orchestrator_provider} / {settings.orchestrator_model}")
-    logger.info(f"Agent fallback: {settings.agent_provider} / {settings.agent_model}")
-    for _t in _runtime_mod.AGENT_TEMPLATES.values():
-        _p = _t.provider_override or settings.agent_provider
-        _m = _t.model_override or settings.agent_model
-        _src = "override" if _t.provider_override else "fallback"
-        logger.info(f"  {_t.id}: {_p} / {_m} ({_src})")
+    logger.info(f"Orchestrator model: {settings.orchestrator_model}")
+    logger.info(f"LLM gateway: OpenRouter (default: {settings.openrouter_default_model})")
     logger.info("=" * 60)
 
     if not settings.stourio_api_key:
@@ -160,9 +205,10 @@ async def lifespan(app: FastAPI):
         logger.warning("Run: python3 scripts/generate_key.py")
         logger.warning("!" * 60)
 
-    # 8. Background workers
+    # 9. Background workers
     consumer_task = asyncio.create_task(signal_consumer_worker())
     escalation_task = asyncio.create_task(approval_escalation_worker())
+    auditor_task = asyncio.create_task(security_auditor_worker())
 
     logger.info("Ready.")
     yield
@@ -170,11 +216,16 @@ async def lifespan(app: FastAPI):
 
     consumer_task.cancel()
     escalation_task.cancel()
-    for task in (consumer_task, escalation_task):
+    auditor_task.cancel()
+    for task in (consumer_task, escalation_task, auditor_task):
         try:
             await task
         except asyncio.CancelledError:
             pass
+
+    # Cleanup Telegram client
+    if telegram_client:
+        await telegram_client.close()
 
 
 app = FastAPI(
@@ -195,6 +246,12 @@ app.add_middleware(
 app.add_middleware(RateLimitMiddleware)
 
 app.include_router(router, prefix="/api")
+
+# Mount new routers
+from src.telegram.webhook import telegram_router
+from src.mcp.router import mcp_router
+app.include_router(telegram_router)
+app.include_router(mcp_router)
 
 from fastapi.staticfiles import StaticFiles
 import os
