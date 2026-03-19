@@ -18,5 +18,6 @@ model: anthropic/claude-sonnet-4-20250514
 tools:
   - read_file
   - search_knowledge
+  - delegate_to_agent
 max_steps: 6
 max_concurrent: 5

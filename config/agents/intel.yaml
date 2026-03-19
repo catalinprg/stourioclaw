@@ -20,5 +20,7 @@ model: anthropic/claude-opus-4-20250918
 tools:
   - search_knowledge
   - generate_report
+  - delegate_to_agent
+  - browser_action
 max_steps: 15
 max_concurrent: 2

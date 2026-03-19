@@ -15,5 +15,6 @@ tools:
   - call_api
   - send_notification
   - web_search
+  - delegate_to_agent
 max_steps: 8
 max_concurrent: 3

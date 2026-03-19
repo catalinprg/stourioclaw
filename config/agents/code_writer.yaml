@@ -18,5 +18,6 @@ tools:
   - write_file
   - execute_code
   - search_knowledge
+  - delegate_to_agent
 max_steps: 12
 max_concurrent: 5

@@ -15,5 +15,7 @@ tools:
   - generate_report
   - read_file
   - query_data
+  - delegate_to_agent
+  - browser_action
 max_steps: 10
 max_concurrent: 3
