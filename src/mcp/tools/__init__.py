@@ -17,7 +17,7 @@ def register_all_tools() -> None:
     from src.mcp.tools.execute_code import execute_code
     from src.mcp.tools.query_data import query_data
     from src.mcp.tools.knowledge import search_knowledge
-    from src.mcp.tools.audit import query_audit_log
+    from src.mcp.tools.audit import read_audit_log
     from src.mcp.tools.api import call_api
     from src.mcp.tools.notification import send_notification
     from src.mcp.tools.report import generate_report
@@ -134,13 +134,18 @@ def register_all_tools() -> None:
     register_tool(
         registry=tool_registry,
         name="search_knowledge",
-        description="Semantic search over internal knowledge base (runbooks, docs)",
+        description="Semantic search over internal knowledge base (runbooks, docs) via pgvector",
         parameters={
             "type": "object",
             "properties": {
                 "query": {
                     "type": "string",
                     "description": "Natural language search query",
+                },
+                "top_k": {
+                    "type": "integer",
+                    "description": "Number of results to return",
+                    "default": 5,
                 },
                 "source_type": {
                     "type": "string",
@@ -152,21 +157,35 @@ def register_all_tools() -> None:
         },
     )(search_knowledge)
 
-    # --- query_audit_log ---
+    # --- read_audit_log ---
     register_tool(
         registry=tool_registry,
-        name="query_audit_log",
-        description="Query the audit log with optional filters",
+        name="read_audit_log",
+        description="Query the audit log with optional filters (agent, action, time range)",
         parameters={
             "type": "object",
             "properties": {
-                "agent_name": {"type": "string"},
-                "tool_name": {"type": "string"},
-                "status": {"type": "string"},
-                "limit": {"type": "integer", "default": 50},
+                "agent": {
+                    "type": "string",
+                    "description": "Filter by agent ID",
+                },
+                "action": {
+                    "type": "string",
+                    "description": "Filter by action type",
+                },
+                "hours": {
+                    "type": "integer",
+                    "description": "Look back N hours (default 24)",
+                    "default": 24,
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Max entries to return",
+                    "default": 20,
+                },
             },
         },
-    )(query_audit_log)
+    )(read_audit_log)
 
     # --- call_api ---
     register_tool(
@@ -200,7 +219,7 @@ def register_all_tools() -> None:
     register_tool(
         registry=tool_registry,
         name="send_notification",
-        description="Send a notification through configured channels",
+        description="Send a notification via Telegram to allowed recipients",
         parameters={
             "type": "object",
             "properties": {
