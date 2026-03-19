@@ -12,8 +12,8 @@ from src.persistence.database import SecurityAlertModel
 
 logger = logging.getLogger("stourio.security.auditor")
 
-FREQUENCY_THRESHOLD = 30  # Max tool calls per agent per audit interval
-ERROR_THRESHOLD = 10  # Max errors per agent before alerting
+FREQUENCY_THRESHOLD = 100  # Max actions per agent per audit interval
+ERROR_THRESHOLD = 20  # Max errors per agent before alerting
 
 
 @dataclass
