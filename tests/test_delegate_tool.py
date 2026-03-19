@@ -35,3 +35,16 @@ async def test_delegate_enforces_max_depth():
         assert "depth" in result["error"].lower()
     finally:
         _delegation_depth.reset(token)
+
+
+@pytest.mark.asyncio
+async def test_delegate_depth_propagates():
+    """Verify contextvars delegation depth propagation works correctly."""
+    from src.mcp.tools.delegate import _delegation_depth
+
+    assert _delegation_depth.get() == 0
+
+    token = _delegation_depth.set(1)
+    assert _delegation_depth.get() == 1
+    _delegation_depth.reset(token)
+    assert _delegation_depth.get() == 0
