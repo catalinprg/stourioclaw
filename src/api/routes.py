@@ -109,7 +109,21 @@ async def decide_approval(approval_id: str, decision: ApprovalDecision):
             context=context,
             input_id=result.original_input_id,
         )
-        
+
+        # Deliver result via Telegram
+        if exec_result.result:
+            try:
+                from src.mcp.tools.notification import get_telegram_client, get_allowed_user_ids
+                tg = get_telegram_client()
+                if tg:
+                    for cid in get_allowed_user_ids():
+                        await tg.send_message(
+                            chat_id=cid,
+                            text=f"[Approved] {exec_result.result}",
+                        )
+            except Exception as e:
+                logger.warning("Failed to deliver approved action result: %s", e)
+
         return {
             "status": "approved_and_executed",
             "execution_id": exec_result.id,

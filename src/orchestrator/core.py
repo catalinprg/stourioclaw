@@ -173,7 +173,12 @@ async def _process_inner(signal: OrchestratorInput, span) -> dict:
             approval = await create_approval_request(
                 action_description=signal.content,
                 risk_level=matched_rule.risk_level,
-                blast_radius="Defined by rule: " + matched_rule.name,
+                blast_radius=json.dumps({
+                    "agent_type": matched_rule.config.get("agent_type", "assistant"),
+                    "objective": signal.content,
+                    "original_content": signal.content,
+                    "rule": matched_rule.name,
+                }),
                 reasoning=f"Intercepted by rule '{matched_rule.name}'",
                 input_id=signal.id,
             )

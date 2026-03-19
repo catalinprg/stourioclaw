@@ -22,3 +22,4 @@ tools:
   - send_notification
 max_steps: 6
 max_concurrent: 2
+is_system: true
