@@ -1,6 +1,6 @@
 # Stourioclaw
 
-Self-hosted personal AI assistant with user-defined agents, persistent daemon agents, async inter-agent messaging, MCP client for external tools, Telegram integration, scheduled jobs, browser automation, and hybrid security monitoring.
+Self-hosted AI agentic operating system. Persistent daemon agents, async inter-agent messaging, external tool discovery via MCP, scheduled jobs, browser automation, and security-first orchestration with human-in-the-loop approval.
 
 ## Architecture
 
