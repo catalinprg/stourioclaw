@@ -278,3 +278,18 @@ async def test_no_provider_failover_logic():
     assert "LLM provider down" in result.result
     # get_agent_adapter called exactly once — no failover retry
     mock_get_adapter.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_tool_executor_passes_agent_name():
+    """default_tool_executor should pass agent_name to registry.execute."""
+    from src.agents.runtime import default_tool_executor
+
+    with patch("src.agents.runtime.get_registry") as mock_get_registry:
+        mock_registry = MagicMock()
+        mock_registry.execute = AsyncMock(return_value={"result": "ok"})
+        mock_get_registry.return_value = mock_registry
+
+        await default_tool_executor("web_search", {"query": "test"}, agent_name="analyst")
+
+        mock_registry.execute.assert_called_once_with("web_search", {"query": "test"}, agent_name="analyst")

@@ -59,7 +59,7 @@ def _resolve_tools(agent: AgentModel) -> list[ToolDefinition]:
 _SAFE_TOOL_NAME = re.compile(r"^[a-zA-Z0-9_\-]+$")
 
 
-async def default_tool_executor(tool_name: str, arguments: dict) -> str:
+async def default_tool_executor(tool_name: str, arguments: dict, agent_name: str = "unknown") -> str:
     """
     Production tool executor. Dispatches LLM tool calls via the ToolRegistry.
     Each tool's execution_mode determines local vs gateway dispatch.
@@ -71,7 +71,7 @@ async def default_tool_executor(tool_name: str, arguments: dict) -> str:
         return json.dumps({"error": f"Invalid tool name: {tool_name}"})
 
     try:
-        result = await registry.execute(tool_name, arguments)
+        result = await registry.execute(tool_name, arguments, agent_name=agent_name)
         return json.dumps(result) if isinstance(result, dict) else str(result)
     except ValueError as e:
         return json.dumps({"error": str(e)})
@@ -205,7 +205,7 @@ async def execute_agent(
                 if tool_executor:
                     tool_result = await tool_executor(tc["name"], tc["arguments"])
                 else:
-                    tool_result = await default_tool_executor(tc["name"], tc["arguments"])
+                    tool_result = await default_tool_executor(tc["name"], tc["arguments"], agent_name=agent.name)
 
                 messages.append(ChatMessage(
                     role="assistant",
