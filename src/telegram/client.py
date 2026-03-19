@@ -113,5 +113,25 @@ class TelegramClient:
         resp.raise_for_status()
         return resp.content
 
+    async def get_updates(self, offset: int | None = None, timeout: int = 30) -> list[dict]:
+        """Long-poll for updates from Telegram."""
+        payload: dict = {"timeout": timeout}
+        if offset is not None:
+            payload["offset"] = offset
+        resp = await self._http.post(
+            f"{self._base_url}/getUpdates",
+            json=payload,
+            timeout=timeout + 10,  # HTTP timeout > long-poll timeout
+        )
+        resp.raise_for_status()
+        return resp.json().get("result", [])
+
+    async def delete_webhook(self) -> None:
+        """Remove any existing webhook so polling works."""
+        resp = await self._http.post(
+            f"{self._base_url}/deleteWebhook",
+        )
+        resp.raise_for_status()
+
     async def close(self) -> None:
         await self._http.aclose()

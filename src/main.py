@@ -164,6 +164,30 @@ async def signal_consumer_worker():
             await asyncio.sleep(5)
 
 
+async def telegram_polling_worker(telegram_client):
+    """Background worker that polls Telegram for updates (used in dev/polling mode)."""
+    from src.telegram.webhook import process_telegram_update
+
+    logger.info("Telegram polling worker started.")
+    offset = None
+
+    while True:
+        try:
+            updates = await telegram_client.get_updates(offset=offset, timeout=30)
+            for update in updates:
+                offset = update["update_id"] + 1
+                try:
+                    await process_telegram_update(update)
+                except Exception as e:
+                    logger.error("Error processing Telegram update: %s", e)
+        except asyncio.CancelledError:
+            logger.info("Telegram polling worker cancelled.")
+            break
+        except Exception as e:
+            logger.error("Telegram polling error: %s", e)
+            await asyncio.sleep(5)
+
+
 async def approval_escalation_worker():
     """Background task to check for stalling approvals and escalate."""
     import json
@@ -297,7 +321,10 @@ async def lifespan(app: FastAPI):
         init_telegram_handler(orchestrator_module, telegram_client)
         set_telegram_client(telegram_client, settings.telegram_allowed_user_ids)
         tool_registry._telegram_client = telegram_client
-        if not settings.telegram_use_polling:
+        if settings.telegram_use_polling:
+            # Delete any existing webhook so polling works
+            await telegram_client.delete_webhook()
+        else:
             await telegram_client.set_webhook(
                 settings.telegram_webhook_url, settings.telegram_webhook_secret
             )
@@ -313,6 +340,11 @@ async def lifespan(app: FastAPI):
     # 9. Background workers
     consumer_task = asyncio.create_task(signal_consumer_worker())
     escalation_task = asyncio.create_task(approval_escalation_worker())
+
+    # 9b. Telegram polling (only in polling mode)
+    polling_task = None
+    if settings.telegram_use_polling and telegram_client:
+        polling_task = asyncio.create_task(telegram_polling_worker(telegram_client))
     auditor_task = asyncio.create_task(security_auditor_worker())
     scheduler_task = asyncio.create_task(
         run_scheduler_loop(async_session, settings.scheduler_tick_seconds)
@@ -365,7 +397,12 @@ async def lifespan(app: FastAPI):
     scheduler_task.cancel()
     reindex_task.cancel()
     sandbox_cleanup_task.cancel()
-    for task in (consumer_task, escalation_task, auditor_task, scheduler_task, reindex_task, sandbox_cleanup_task):
+    if polling_task:
+        polling_task.cancel()
+    all_tasks = [consumer_task, escalation_task, auditor_task, scheduler_task, reindex_task, sandbox_cleanup_task]
+    if polling_task:
+        all_tasks.append(polling_task)
+    for task in all_tasks:
         try:
             await task
         except asyncio.CancelledError:
