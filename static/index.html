@@ -76,6 +76,7 @@
             const [apiKey, setApiKey] = useState(sessionStorage.getItem('stourio_key') || '');
             const [view, setView] = useState('console');
             const [status, setStatus] = useState(null);
+            const [refreshKey, setRefreshKey] = useState(0);
 
             // Core API fetch wrapper
             const api = async (endpoint, method = 'GET', body = null) => {
@@ -143,6 +144,9 @@
                                     <button key={item.key} onClick={() => setView(item.key)} className={view === item.key ? 'text-stourio-primary underline underline-offset-4' : ''}>{item.label}</button>
                                 ))}
 
+                                {/* Refresh */}
+                                <button onClick={() => { setRefreshKey(k => k + 1); api('/api/status').then(setStatus).catch(console.error); }} className="hover:text-stourio-primary" title="Refresh current view">&#8635; Refresh</button>
+
                                 {/* Divider */}
                                 <div className="w-px h-4 bg-stourio-border mx-2"></div>
 
@@ -172,14 +176,14 @@
                     </div>
 
                     {/* Views */}
-                    {view === 'console' && <ConsoleView api={api} />}
-                    {view === 'agents' && <AgentManager api={api} />}
-                    {view === 'security' && <SecurityFeed api={api} />}
-                    {view === 'telegram' && <TelegramViewer api={api} />}
-                    {view === 'rules' && <RulesView api={api} />}
-                    {view === 'audit' && <AuditView api={api} />}
-                    {view === 'cost' && <CostView api={api} />}
-                    {view === 'deployment' && <DeploymentManager api={api} status={status} />}
+                    {view === 'console' && <ConsoleView key={refreshKey} api={api} />}
+                    {view === 'agents' && <AgentManager key={refreshKey} api={api} />}
+                    {view === 'security' && <SecurityFeed key={refreshKey} api={api} />}
+                    {view === 'telegram' && <TelegramViewer key={refreshKey} api={api} />}
+                    {view === 'rules' && <RulesView key={refreshKey} api={api} />}
+                    {view === 'audit' && <AuditView key={refreshKey} api={api} />}
+                    {view === 'cost' && <CostView key={refreshKey} api={api} />}
+                    {view === 'deployment' && <DeploymentManager key={refreshKey} api={api} status={status} />}
                 </div>
             );
         }
