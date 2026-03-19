@@ -16,7 +16,7 @@ from src.scheduler.worker import run_scheduler_loop
 from src.browser.engine import shutdown_browser_pool
 from src.models.schemas import OrchestratorInput, SignalSource, WebhookSignal
 from src.telemetry import setup_tracing
-from src.daemons.manager import DaemonManager
+from src.daemons.manager import DaemonManager, set_daemon_manager
 from src.mcp.client import get_mcp_client_pool
 
 logging.basicConfig(
@@ -292,6 +292,7 @@ async def lifespan(app: FastAPI):
     daemon_manager = None
     if settings.daemon_manager_enabled:
         daemon_manager = DaemonManager()
+        set_daemon_manager(daemon_manager)
         await daemon_manager.start()
 
     # 11. MCP client pool — connect to registered servers

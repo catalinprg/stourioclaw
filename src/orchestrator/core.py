@@ -303,28 +303,32 @@ async def _process_inner(signal: OrchestratorInput, span) -> dict:
 
         if _target and _target.execution_mode == "daemon":
             from src.daemons.inbox import enqueue_message
-            # Check if daemon is actually running (errata E1)
-            daemon_running = False
-            try:
-                from src.daemons.manager import DaemonManager
-                # Access the global manager — it's stored in main.py lifespan
-                # For now, always enqueue (daemon wakes or oneshot fires via inbox handler)
-                daemon_running = True  # Inbox enqueue + notify will wake it or trigger oneshot
-            except Exception:
-                pass
+            from src.daemons.manager import get_daemon_manager
 
-            entry_id = await enqueue_message(
-                target_agent=agent_type,
-                message=args.get("objective", signal.content),
-                from_agent="orchestrator",
-                context=signal.content,
-            )
-            return {
-                "status": "routed_to_daemon",
-                "message": f"Message delivered to daemon '{agent_type}' inbox.",
-                "agent_type": agent_type,
-                "entry_id": entry_id,
-            }
+            manager = get_daemon_manager()
+            daemon_running = manager is not None and manager.is_running(agent_type)
+
+            if daemon_running:
+                # Daemon is alive — enqueue to inbox, pub/sub wakes it
+                entry_id = await enqueue_message(
+                    target_agent=agent_type,
+                    message=args.get("objective", signal.content),
+                    from_agent="orchestrator",
+                    context=signal.content,
+                )
+                return {
+                    "status": "routed_to_daemon",
+                    "message": f"Message delivered to daemon '{agent_type}' inbox.",
+                    "agent_type": agent_type,
+                    "entry_id": entry_id,
+                }
+            else:
+                # Daemon not running — fall back to oneshot execution (no dead letters)
+                await audit.log(
+                    "DAEMON_FALLBACK",
+                    f"Daemon '{agent_type}' not running, executing as oneshot",
+                    input_id=signal.id,
+                )
 
         # Low/medium risk: execute immediately
         execution = await get_pool().execute(

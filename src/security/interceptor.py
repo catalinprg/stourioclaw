@@ -49,6 +49,21 @@ class SecurityInterceptor:
         if not self.enabled:
             return InterceptResult(intercepted=False)
 
+        # MCP tools (contain "__") are treated as external-risk
+        if "__" in tool_name:
+            matched = _contains_sensitive(arguments)
+            if matched:
+                return InterceptResult(
+                    intercepted=True,
+                    reason=f"Sensitive pattern '{matched}' detected in MCP tool '{tool_name}'",
+                    severity="CRITICAL",
+                )
+            return InterceptResult(
+                intercepted=True,
+                reason=f"MCP tool '{tool_name}' makes external calls",
+                severity="MEDIUM",
+            )
+
         # High-risk tools are always intercepted
         if tool_name in HIGH_RISK_TOOLS:
             return InterceptResult(

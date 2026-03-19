@@ -148,3 +148,18 @@ class DaemonManager:
             }
             for name, task in self._tasks.items()
         }
+
+
+# Global singleton
+_manager: DaemonManager | None = None
+
+
+def get_daemon_manager() -> DaemonManager | None:
+    """Return the global daemon manager instance (set during lifespan startup)."""
+    return _manager
+
+
+def set_daemon_manager(manager: DaemonManager) -> None:
+    """Set the global daemon manager instance."""
+    global _manager
+    _manager = manager

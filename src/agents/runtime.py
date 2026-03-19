@@ -107,7 +107,9 @@ async def default_tool_executor(tool_name: str, arguments: dict, agent_name: str
                             tool_name, arguments, agent_name, check
                         ))
 
-                result = await pool.execute_tool(server_name, remote_tool_name, arguments)
+                # Strip internal _agent_name before sending to external MCP server
+                mcp_args = {k: v for k, v in arguments.items() if k != "_agent_name"}
+                result = await pool.execute_tool(server_name, remote_tool_name, mcp_args)
                 return json.dumps(result)
         return json.dumps({"error": f"Tool '{tool_name}' not found in local registry or MCP servers"})
     except Exception as e:

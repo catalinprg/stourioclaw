@@ -120,12 +120,21 @@ async def run_daemon_loop(
     channel = f"{INBOX_NOTIFY_PREFIX}{agent_name}"
     await pubsub.subscribe(channel)
 
+    async def _wait_for_inbox_message():
+        """Poll pub/sub until an actual message arrives."""
+        while not stopping.is_set():
+            msg = await pubsub.get_message(ignore_subscribe_messages=True, timeout=1.0)
+            if msg is not None:
+                return msg
+            await asyncio.sleep(0.1)
+        return None
+
     try:
         while not stopping.is_set():
-            # Wait for event or tick timeout
+            # Wait for inbox message OR tick timeout (whichever first)
             try:
                 msg = await asyncio.wait_for(
-                    pubsub.get_message(ignore_subscribe_messages=True, timeout=1.0),
+                    _wait_for_inbox_message(),
                     timeout=tick_seconds,
                 )
             except asyncio.TimeoutError:
