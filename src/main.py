@@ -17,6 +17,7 @@ from src.browser.engine import shutdown_browser_pool
 from src.models.schemas import OrchestratorInput, SignalSource, WebhookSignal
 from src.telemetry import setup_tracing
 from src.daemons.manager import DaemonManager
+from src.mcp.client import get_mcp_client_pool
 
 logging.basicConfig(
     level=getattr(logging, settings.log_level.upper()),
@@ -293,6 +294,22 @@ async def lifespan(app: FastAPI):
         daemon_manager = DaemonManager()
         await daemon_manager.start()
 
+    # 11. MCP client pool — connect to registered servers
+    mcp_pool = get_mcp_client_pool()
+    async with async_session() as session:
+        from src.persistence.database import McpServerRecord
+        from sqlalchemy import select as sa_select
+        result = await session.execute(
+            sa_select(McpServerRecord).where(McpServerRecord.active == True)
+        )
+        for server in result.scalars().all():
+            await mcp_pool.connect(server.name, {
+                "transport": server.transport,
+                "endpoint_url": server.endpoint_url,
+                "endpoint_command": server.endpoint_command,
+                "auth_env_var": server.auth_env_var,
+            })
+
     logger.info("Ready.")
     yield
     logger.info("Shutting down.")
@@ -310,6 +327,9 @@ async def lifespan(app: FastAPI):
     # Stop daemons gracefully
     if daemon_manager:
         await daemon_manager.stop()
+
+    # Disconnect MCP clients
+    await get_mcp_client_pool().disconnect_all()
 
     # Cleanup browser pool
     await shutdown_browser_pool()
