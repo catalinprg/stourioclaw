@@ -70,6 +70,9 @@ async def default_tool_executor(tool_name: str, arguments: dict, agent_name: str
         logger.warning(f"SECURITY: Tool name contains illegal characters: '{tool_name}'")
         return json.dumps({"error": f"Invalid tool name: {tool_name}"})
 
+    # Inject caller identity for tools that need it (messaging, etc.)
+    arguments = {**arguments, "_agent_name": agent_name}
+
     try:
         result = await registry.execute(tool_name, arguments, agent_name=agent_name)
         return json.dumps(result) if isinstance(result, dict) else str(result)

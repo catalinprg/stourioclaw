@@ -23,6 +23,7 @@ def register_all_tools() -> None:
     from src.mcp.tools.report import generate_report
     from src.mcp.tools.delegate import delegate_to_agent
     from src.mcp.tools.browser import browser_action
+    from src.mcp.tools.messaging import send_message, read_messages, heartbeat_ack
 
     # --- web_search ---
     register_tool(
@@ -341,5 +342,58 @@ def register_all_tools() -> None:
             "required": ["action"],
         },
     )(browser_action)
+
+    # --- send_message ---
+    register_tool(
+        registry=tool_registry,
+        name="send_message",
+        description="Send a message to another agent's inbox. Fire-and-forget, non-blocking.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "target_agent": {
+                    "type": "string",
+                    "description": "Name of the agent to send the message to",
+                },
+                "message": {
+                    "type": "string",
+                    "description": "Message content (max 10,000 characters)",
+                },
+                "context": {
+                    "type": "string",
+                    "description": "Additional context for the receiving agent",
+                },
+            },
+            "required": ["target_agent", "message"],
+        },
+    )(send_message)
+
+    # --- read_messages ---
+    register_tool(
+        registry=tool_registry,
+        name="read_messages",
+        description="Check your inbox for pending messages from other agents.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "limit": {
+                    "type": "integer",
+                    "description": "Max messages to return (default 10)",
+                    "default": 10,
+                },
+            },
+        },
+    )(read_messages)
+
+    # --- heartbeat_ack ---
+    register_tool(
+        registry=tool_registry,
+        name="heartbeat_ack",
+        description="Signal that your heartbeat check found nothing requiring action. Call this when everything looks normal.",
+        parameters={
+            "type": "object",
+            "properties": {},
+        },
+    )(heartbeat_ack)
 
     logger.info("Registered %d MCP tools", len(tool_registry.list_tools()))
