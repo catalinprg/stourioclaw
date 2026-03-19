@@ -130,6 +130,19 @@ async def decide_approval(approval_id: str, decision: ApprovalDecision):
             "approval_id": approval_id,
         }
 
+    # Notify user of rejection via Telegram
+    try:
+        from src.mcp.tools.notification import get_telegram_client, get_allowed_user_ids
+        tg = get_telegram_client()
+        if tg:
+            for cid in get_allowed_user_ids():
+                await tg.send_message(
+                    chat_id=cid,
+                    text=f"[Rejected] Action was rejected: {result.action_description}",
+                )
+    except Exception as e:
+        logger.warning("Failed to deliver rejection notification: %s", e)
+
     return {
         "status": "rejected",
         "message": "Action rejected.",

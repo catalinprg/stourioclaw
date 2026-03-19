@@ -110,7 +110,13 @@ async def process_telegram_update(update: dict) -> Optional[str]:
         logger.error("Orchestrator not initialized")
         return None
 
-    result = await _orchestrator.process(orch_input)
+    try:
+        result = await _orchestrator.process(orch_input)
+    except Exception as e:
+        logger.error("Orchestrator error: %s", e)
+        if _telegram_client:
+            await _telegram_client.send_message(chat_id=chat_id, text=f"Error: {str(e)}")
+        return None
 
     # 8. Send response back via Telegram
     response_text = None
@@ -120,8 +126,16 @@ async def process_telegram_update(update: dict) -> Optional[str]:
         response_text = result
 
     if response_text and _telegram_client:
-        formatted = to_telegram_markdown(response_text)
-        await _telegram_client.send_message(chat_id=chat_id, text=formatted)
+        try:
+            formatted = to_telegram_markdown(response_text)
+            await _telegram_client.send_message(chat_id=chat_id, text=formatted)
+        except Exception as e:
+            # Markdown might fail — try plain text
+            logger.warning("Markdown send failed, retrying plain: %s", e)
+            try:
+                await _telegram_client.send_message(chat_id=chat_id, text=response_text, parse_mode="")
+            except Exception as e2:
+                logger.error("Failed to send Telegram response: %s", e2)
 
     return response_text
 
