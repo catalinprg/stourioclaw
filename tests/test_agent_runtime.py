@@ -292,4 +292,4 @@ async def test_tool_executor_passes_agent_name():
 
         await default_tool_executor("web_search", {"query": "test"}, agent_name="analyst")
 
-        mock_registry.execute.assert_called_once_with("web_search", {"query": "test"}, agent_name="analyst")
+        mock_registry.execute.assert_called_once_with("web_search", {"query": "test", "_agent_name": "analyst"}, agent_name="analyst")
