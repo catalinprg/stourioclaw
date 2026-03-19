@@ -1,6 +1,6 @@
 # Stourioclaw
 
-Self-hosted personal AI assistant with 6 specialized agents, Telegram integration, and hybrid security monitoring.
+Self-hosted personal AI assistant with user-defined agents, Telegram integration, scheduled jobs, inter-agent delegation, browser automation, and hybrid security monitoring.
 
 ## Architecture
 
@@ -13,13 +13,18 @@ Telegram / Webhook API
         |  (no match)
    [LLM Orchestrator] → routes via OpenRouter
         |
-   [Agent] → Assistant | Analyst | Code Writer | Code Reviewer | Intel
+   [Agent] → user-defined agents (create via API or admin panel)
+        |
+   [Delegation] → agents can delegate to other agents (depth-limited)
         |
    [CyberSecurity] → inline intercept (high-risk) + passive audit
         |
    [Approval Flow] → human-in-the-loop if flagged
         |
    [Audit Trail] → immutable log
+
+   [Scheduler] → cron jobs fire agents on schedule
+   [Browser]   → Playwright-based web automation (domain-restricted)
 ```
 
 ## Quick Start (Local)
@@ -85,14 +90,58 @@ Admin panel: `https://your-domain.com/admin` (login with your `STOURIO_API_KEY`)
 
 ## Agents
 
+Create agents via the API (`POST /api/agents`) or admin panel. Each agent has a name, model, system prompt, and assigned tools.
+
+**Default agent:**
+
 | Agent | Role | Model | Tools |
 |-------|------|-------|-------|
-| Assistant | General tasks — weather, email, reminders | claude-sonnet | web_search, call_api, send_notification |
-| Analyst | Data analysis, research, structured reasoning | claude-sonnet | call_api, generate_report, read_file, query_data |
-| Code Writer | Code generation and implementation | claude-sonnet | read_file, write_file, execute_code, search_knowledge |
-| Code Reviewer | Reviews Code Writer output | claude-sonnet | read_file, search_knowledge |
 | CyberSecurity | Monitors all agent actions for threats | gpt-4o | read_audit_log, send_notification |
-| Intel | Deep thinking, planning, strategy | claude-opus | search_knowledge, generate_report |
+
+**Available tools for agents:**
+
+| Tool | Description | Risk Level |
+|------|-------------|------------|
+| `web_search` | Search the web via Tavily | Low |
+| `read_file` | Read files from workspace | Low |
+| `write_file` | Write files to workspace | High (requires approval) |
+| `execute_code` | Run Python or bash | High (requires approval) |
+| `call_api` | HTTP requests to external APIs | External |
+| `send_notification` | Send Telegram alerts | External |
+| `query_data` | Parse CSV/JSON data | Low |
+| `search_knowledge` | Semantic search over RAG knowledge base | Low |
+| `read_audit_log` | Query the audit trail | Low |
+| `generate_report` | Create markdown reports | Low |
+| `delegate_to_agent` | Delegate work to another agent (depth-limited to 3) | External |
+| `browser_action` | Web automation: navigate, click, type, screenshot, extract text | External |
+
+## Cron Jobs
+
+Schedule agents to run automatically. Manage via API or admin panel.
+
+```bash
+# Create a cron job (runs analyst every day at 9am)
+curl -X POST http://localhost:8000/api/cron \
+  -H "X-STOURIO-KEY: your-key" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "daily-report", "schedule": "0 9 * * *", "agent_type": "analyst", "objective": "Generate daily summary"}'
+
+# List cron jobs
+curl http://localhost:8000/api/cron -H "X-STOURIO-KEY: your-key"
+
+# Delete
+curl -X DELETE http://localhost:8000/api/cron/daily-report -H "X-STOURIO-KEY: your-key"
+```
+
+## Browser Automation
+
+Agents with the `browser_action` tool can interact with web pages. Set `BROWSER_ALLOWED_DOMAINS` to restrict which sites agents can visit (empty = allow all).
+
+```
+BROWSER_ALLOWED_DOMAINS=["example.com","docs.python.org","github.com"]
+```
+
+Actions: `navigate`, `click`, `type`, `screenshot`, `extract_text`, `get_url`, `close_session`. Pages persist across calls via `session_id` for multi-step workflows.
 
 ## Admin Panel
 
@@ -145,6 +194,10 @@ Add to your Claude Code MCP config:
 | `SEARCH_API_KEY` | Web search API key | No |
 | `WORKSPACE_DIR` | Agent workspace directory | No (`/app/workspace`) |
 | `AGENT_CONCURRENCY_DEFAULT` | Max concurrent agents per type | No (`3`) |
+| `BROWSER_ALLOWED_DOMAINS` | Restrict browser to these domains | No (`[]` = all) |
+| `BROWSER_HEADLESS` | Run Chromium headless | No (`true`) |
+| `BROWSER_TIMEOUT_MS` | Browser action timeout | No (`30000`) |
+| `SCHEDULER_TICK_SECONDS` | Cron job check interval | No (`30`) |
 
 ## Project Structure
 
@@ -167,7 +220,9 @@ stourioclaw/
       embeddings/      # Embedding providers
       reranker/        # Re-ranking providers
     rules/             # Deterministic rule engine
+    scheduler/         # Cron job models, store, background worker
     security/          # CyberSecurity agent, inline + passive modes
+    browser/           # Playwright browser pool + action dispatcher
     telegram/          # Telegram bot integration
     tools/             # Tool registry + plugins
       python/          # Python tool plugins
