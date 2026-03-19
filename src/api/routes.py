@@ -1,15 +1,22 @@
 from __future__ import annotations
 import json
 import logging
+from datetime import datetime, timezone
+from typing import Optional
+
 from fastapi import APIRouter, HTTPException, Security, Depends
 from fastapi.security.api_key import APIKeyHeader
+from pydantic import BaseModel, Field
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from src.config import settings
 from src.models.schemas import (
-    ChatRequest, WebhookSignal, OrchestratorInput, SignalSource,
+    WebhookSignal, OrchestratorInput, SignalSource,
     ApprovalDecision, Rule, new_id,
 )
-from src.orchestrator.core import process
-from src.persistence import conversations, audit
+from src.persistence import audit
+from src.persistence.database import get_session, SecurityAlertModel
 from src.persistence.redis_store import (
     activate_kill_switch, deactivate_kill_switch, is_killed, enqueue_signal
 )
@@ -17,6 +24,7 @@ from src.guardrails.approvals import (
     resolve_approval, get_pending_approvals,
 )
 from src.rules.engine import get_rules, add_rule, remove_rule
+from src.agents.registry import AgentRegistry
 from src.agents.runtime import list_templates
 from src.orchestrator.concurrency import get_pool
 from src.automation.workflows import list_workflows
@@ -46,31 +54,6 @@ async def get_api_key(header_key: str = Security(api_key_header)):
 
 router = APIRouter(dependencies=[Depends(get_api_key)])
 
-
-# =============================================================================
-# CHAT - Human input channel
-# =============================================================================
-
-@router.post("/chat")
-async def chat(req: ChatRequest):
-    conv_id = req.conversation_id or new_id()
-    await conversations.save_message(conv_id, "user", req.message)
-
-    signal = OrchestratorInput(
-        source=SignalSource.USER,
-        content=req.message,
-        conversation_id=conv_id,
-    )
-
-    result = await process(signal)
-
-    response_text = result.get("message", "")
-    await conversations.save_message(conv_id, "assistant", response_text)
-
-    return {
-        "conversation_id": conv_id,
-        **result,
-    }
 
 
 # =============================================================================
@@ -203,18 +186,6 @@ async def audit_log(limit: int = 50):
     return await audit.get_recent(limit=limit)
 
 
-# =============================================================================
-# DOCUMENTS - RAG ingestion
-# =============================================================================
-
-@router.post("/documents/ingest")
-async def ingest_documents(api_key: str = Depends(get_api_key)):
-    from src.rag.embeddings.openai_embedder import OpenAIEmbedder
-    from src.rag.ingestion import ingest_runbooks
-    embedder = OpenAIEmbedder(api_key=settings.openai_api_key, model=settings.embedding_model)
-    count = await ingest_runbooks(embedder)
-    return {"status": "ok", "chunks_ingested": count}
-
 
 # =============================================================================
 # USAGE - Token/cost tracking
@@ -232,3 +203,167 @@ async def get_usage_summary_endpoint(api_key: str = Depends(get_api_key), group_
     from src.tracking.tracker import get_usage_summary
     summary = await get_usage_summary(group_by=group_by)
     return {"summary": summary}
+
+
+# =============================================================================
+# AGENTS - CRUD
+# =============================================================================
+
+class AgentCreateRequest(BaseModel):
+    name: str = Field(..., max_length=100)
+    display_name: str = Field(..., max_length=200)
+    description: str = ""
+    system_prompt: str = ""
+    model: str = Field(..., max_length=100)
+    tools: list[str] = Field(default_factory=list)
+    max_steps: int = Field(default=8, ge=1, le=50)
+    max_concurrent: int = Field(default=3, ge=1, le=20)
+
+
+class AgentUpdateRequest(BaseModel):
+    display_name: Optional[str] = None
+    description: Optional[str] = None
+    system_prompt: Optional[str] = None
+    model: Optional[str] = None
+    tools: Optional[list[str]] = None
+    max_steps: Optional[int] = Field(default=None, ge=1, le=50)
+    max_concurrent: Optional[int] = Field(default=None, ge=1, le=20)
+    is_active: Optional[bool] = None
+
+
+class AlertStatusUpdate(BaseModel):
+    status: str = Field(..., pattern="^(acknowledged|resolved|false-positive)$")
+
+
+def _agent_to_dict(agent) -> dict:
+    return {
+        "id": agent.id,
+        "name": agent.name,
+        "display_name": agent.display_name,
+        "description": agent.description,
+        "model": agent.model,
+        "tools": agent.tools,
+        "max_steps": agent.max_steps,
+        "max_concurrent": agent.max_concurrent,
+        "is_active": agent.is_active,
+        "is_system": agent.is_system,
+    }
+
+
+@router.get("/agents")
+async def list_agents(session: AsyncSession = Depends(get_session)):
+    registry = AgentRegistry(session)
+    agents = await registry.list_active()
+    return [_agent_to_dict(a) for a in agents]
+
+
+@router.post("/agents", status_code=201)
+async def create_agent(
+    req: AgentCreateRequest,
+    session: AsyncSession = Depends(get_session),
+):
+    registry = AgentRegistry(session)
+    existing = await registry.get_by_name(req.name)
+    if existing:
+        raise HTTPException(status_code=409, detail=f"Agent '{req.name}' already exists.")
+    agent = await registry.create(
+        name=req.name,
+        display_name=req.display_name,
+        description=req.description,
+        system_prompt=req.system_prompt,
+        model=req.model,
+        tools=req.tools,
+        max_steps=req.max_steps,
+        max_concurrent=req.max_concurrent,
+    )
+    await session.commit()
+    await audit.log("AGENT_CREATED", f"Agent '{req.name}' created via API")
+    return {"id": agent.id, "name": agent.name}
+
+
+@router.put("/agents/{name}")
+async def update_agent(
+    name: str,
+    req: AgentUpdateRequest,
+    session: AsyncSession = Depends(get_session),
+):
+    registry = AgentRegistry(session)
+    updates = req.model_dump(exclude_none=True)
+    if not updates:
+        raise HTTPException(status_code=400, detail="No fields to update.")
+    agent = await registry.update(name, **updates)
+    if agent is None:
+        raise HTTPException(status_code=404, detail=f"Agent '{name}' not found.")
+    await session.commit()
+    await audit.log("AGENT_UPDATED", f"Agent '{name}' updated via API")
+    return _agent_to_dict(agent)
+
+
+@router.delete("/agents/{name}")
+async def delete_agent(
+    name: str,
+    session: AsyncSession = Depends(get_session),
+):
+    registry = AgentRegistry(session)
+    agent = await registry.get_by_name(name)
+    if agent is None:
+        raise HTTPException(status_code=400, detail=f"Agent '{name}' not found.")
+    if agent.is_system:
+        raise HTTPException(status_code=400, detail=f"Cannot delete system agent '{name}'.")
+    deleted = await registry.delete(name)
+    await session.commit()
+    await audit.log("AGENT_DELETED", f"Agent '{name}' deleted via API")
+    return {"status": "deleted", "name": name}
+
+
+# =============================================================================
+# SECURITY ALERTS
+# =============================================================================
+
+@router.get("/security/alerts")
+async def list_security_alerts(session: AsyncSession = Depends(get_session)):
+    result = await session.execute(
+        select(SecurityAlertModel)
+        .where(SecurityAlertModel.status == "OPEN")
+        .order_by(SecurityAlertModel.created_at.desc())
+        .limit(50)
+    )
+    alerts = result.scalars().all()
+    return [
+        {
+            "id": a.id,
+            "severity": a.severity,
+            "alert_type": a.alert_type,
+            "description": a.description,
+            "source_agent": a.source_agent,
+            "status": a.status,
+            "created_at": a.created_at.isoformat() if a.created_at else None,
+        }
+        for a in alerts
+    ]
+
+
+@router.post("/security/alerts/{alert_id}")
+async def update_alert_status(
+    alert_id: str,
+    req: AlertStatusUpdate,
+    session: AsyncSession = Depends(get_session),
+):
+    result = await session.execute(
+        select(SecurityAlertModel).where(SecurityAlertModel.id == alert_id)
+    )
+    alert = result.scalars().first()
+    if alert is None:
+        raise HTTPException(status_code=404, detail=f"Alert '{alert_id}' not found.")
+
+    status_map = {
+        "acknowledged": "ACKNOWLEDGED",
+        "resolved": "RESOLVED",
+        "false-positive": "FALSE_POSITIVE",
+    }
+    alert.status = status_map[req.status]
+    if req.status == "resolved":
+        alert.resolved_at = datetime.now(timezone.utc)
+    await session.commit()
+    await audit.log("SECURITY_ALERT_UPDATED", f"Alert {alert_id} -> {alert.status}")
+    return {"id": alert_id, "status": alert.status}
