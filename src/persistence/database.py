@@ -28,6 +28,7 @@ class AuditLog(Base):
     execution_id = Column(String, index=True)
     risk_level = Column(String)
     timestamp = Column(DateTime, server_default=func.now(), index=True)
+    agent_id = Column(String, nullable=True)
 
 
 class ConversationMessage(Base):
@@ -38,6 +39,8 @@ class ConversationMessage(Base):
     role = Column(String, nullable=False)
     content = Column(Text, nullable=False)
     timestamp = Column(DateTime, server_default=func.now())
+    source = Column(String, default="api")
+    agent_id = Column(String, nullable=True)
 
 
 class RuleRecord(Base):
@@ -101,6 +104,40 @@ class TokenUsageRecord(Base):
     cached_hit = Column(Boolean, default=False)
     units_used = Column(Integer, default=0)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    openrouter_model = Column(String, nullable=True)
+
+
+class AgentModel(Base):
+    __tablename__ = "agents"
+
+    id = Column(String, primary_key=True)
+    name = Column(String, unique=True, nullable=False)
+    display_name = Column(String, nullable=False)
+    description = Column(Text, default="")
+    system_prompt = Column(Text, default="")
+    model = Column(String, nullable=False)
+    tools = Column(JSON, default=list)
+    max_steps = Column(Integer, default=8)
+    max_concurrent = Column(Integer, default=3)
+    is_active = Column(Boolean, default=True)
+    is_system = Column(Boolean, default=False)
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
+class SecurityAlertModel(Base):
+    __tablename__ = "security_alerts"
+
+    id = Column(String, primary_key=True)
+    severity = Column(String, nullable=False)
+    alert_type = Column(String, nullable=False)
+    description = Column(Text, default="")
+    source_agent = Column(String, default="")
+    source_execution_id = Column(String, default="")
+    raw_evidence = Column(JSON, default=dict)
+    status = Column(String, default="OPEN", index=True)
+    created_at = Column(DateTime, server_default=func.now())
+    resolved_at = Column(DateTime, nullable=True)
 
 
 # --- Init ---
