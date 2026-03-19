@@ -22,23 +22,66 @@ Telegram / Webhook API
    [Audit Trail] → immutable log
 ```
 
-## Quick Start
+## Quick Start (Local)
 
 **Prerequisites:** Docker, Docker Compose, Telegram account.
 
 1. Create a Telegram bot with [@BotFather](https://t.me/BotFather), save the token
 2. Get your user ID from [@userinfobot](https://t.me/userinfobot)
-3. Copy `.env.example` to `.env` and fill in:
+3. Configure environment:
+   ```bash
+   cp .env.example .env
+   ```
+4. Fill in `.env`:
    - `OPENROUTER_API_KEY` (required)
    - `TELEGRAM_BOT_TOKEN` (required)
-   - `TELEGRAM_ALLOWED_USER_IDS` (required)
-   - `TELEGRAM_WEBHOOK_URL` (required)
-   - `TELEGRAM_WEBHOOK_SECRET` (required)
-   - `STOURIO_API_KEY` (required)
+   - `TELEGRAM_ALLOWED_USER_IDS` (required — your user ID from step 2)
+   - `TELEGRAM_WEBHOOK_SECRET` (required — any random string)
+   - `STOURIO_API_KEY` (required — any random string, used for admin panel + API auth)
+   - `TELEGRAM_WEBHOOK_URL` — set to your public URL, or use polling for local dev:
+     ```
+     TELEGRAM_USE_POLLING=true
+     ```
    - `OPENAI_API_KEY` (optional — embeddings + voice transcription)
-   - `SEARCH_API_KEY` (optional — web search)
-4. `docker compose up -d`
-5. Message your bot on Telegram
+   - `SEARCH_API_KEY` (optional — web search via Tavily)
+5. Start:
+   ```bash
+   docker compose up -d
+   ```
+6. Message your bot on Telegram
+7. Open admin panel at `http://localhost:8000/admin` (login with your `STOURIO_API_KEY`)
+
+## VPS Deployment
+
+```bash
+# On your VPS
+git clone https://github.com/catalinprg/stourioclaw.git
+cd stourioclaw
+cp .env.example .env
+```
+
+Edit `.env` with production values:
+```
+OPENROUTER_API_KEY=your-key
+TELEGRAM_BOT_TOKEN=your-bot-token
+TELEGRAM_ALLOWED_USER_IDS=your-telegram-user-id
+TELEGRAM_WEBHOOK_URL=https://your-domain.com/api/telegram/webhook
+TELEGRAM_WEBHOOK_SECRET=generate-a-random-string
+STOURIO_API_KEY=generate-a-random-string
+POSTGRES_PASSWORD=generate-a-strong-password
+REDIS_PASSWORD=generate-a-strong-password
+DATABASE_URL=postgresql+asyncpg://stourio:your-postgres-password@postgres:5432/stourio
+REDIS_URL=redis://:your-redis-password@redis:6379/0
+```
+
+Start:
+```bash
+docker compose up -d
+```
+
+The Telegram webhook registers automatically on startup. Set up a reverse proxy (nginx/caddy) to expose port 8000 over HTTPS.
+
+Admin panel: `https://your-domain.com/admin` (login with your `STOURIO_API_KEY`)
 
 ## Agents
 
@@ -53,7 +96,7 @@ Telegram / Webhook API
 
 ## Admin Panel
 
-`http://localhost:8000/admin`
+`http://localhost:8000/admin` — login with your `STOURIO_API_KEY`.
 
 Views: Console, Agents, Security, Telegram, Rules, Audit, Costs, Deployment.
 
