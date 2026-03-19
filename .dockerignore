@@ -1,0 +1,13 @@
+.env
+.env.*
+.git
+.gitignore
+.DS_Store
+__pycache__
+*.pyc
+.pytest_cache
+.claude
+docs/
+workspace/
+*.md
+!requirements.txt
