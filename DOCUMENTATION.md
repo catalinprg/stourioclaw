@@ -29,6 +29,32 @@ Complete reference for configuring and operating stourioclaw — a self-hosted A
 - [Cost Tracking](#cost-tracking)
 - [Troubleshooting](#troubleshooting)
 
+- [Required APIs](#required-apis)
+
+---
+
+## Required APIs
+
+| API | Purpose | Required | Free Tier |
+|-----|---------|----------|-----------|
+| **OpenRouter** | LLM routing — all agent reasoning, orchestrator routing, memory extraction, summarization | Yes | No |
+| **Telegram Bot** | User interface — messages, voice, images, notifications, approval alerts | Yes | Yes |
+| **OpenAI** | Embeddings (`text-embedding-3-small`) + voice transcription (Whisper) | For RAG + voice | No |
+| **ElevenLabs** | Text-to-speech — voice message output | For TTS | Yes (limited) |
+| **Tavily** | Web search tool | For `web_search` | Yes (1000/month) |
+| **Cohere** | Result reranking for RAG | Optional (improves search quality) | Yes (limited) |
+
+```
+OPENROUTER_API_KEY=        # Required
+TELEGRAM_BOT_TOKEN=        # Required
+OPENAI_API_KEY=            # For embeddings + voice
+ELEVENLABS_API_KEY=        # For TTS
+SEARCH_API_KEY=            # Tavily
+COHERE_API_KEY=            # Reranking
+```
+
+Plus any MCP server auth tokens you connect (e.g., `NOTION_MCP_TOKEN`, `GITHUB_TOKEN`) — those are per-integration, added as needed via `POST /api/mcp-servers`.
+
 ---
 
 ## System Overview
