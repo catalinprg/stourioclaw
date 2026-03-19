@@ -67,3 +67,36 @@ async def test_delete_cron_job_not_found(mock_session):
     mock_session.execute = AsyncMock(return_value=mock_result)
     result = await store.delete("nonexistent")
     assert result is False
+
+
+@pytest.mark.asyncio
+async def test_scheduler_tick_processes_due_job():
+    from src.scheduler.worker import scheduler_tick
+
+    mock_job = MagicMock()
+    mock_job.name = "test-job"
+    mock_job.agent_type = "assistant"
+    mock_job.objective = "Test objective"
+    mock_job.schedule = "* * * * *"
+    mock_job.conversation_id = None
+
+    mock_store = AsyncMock()
+    mock_store.get_due_jobs.return_value = [mock_job]
+    mock_store.mark_executed = AsyncMock()
+
+    mock_execution = MagicMock()
+    mock_execution.status.value = "completed"
+
+    mock_session_factory = MagicMock()
+    mock_session = AsyncMock()
+    mock_session_factory.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_session_factory.return_value.__aexit__ = AsyncMock(return_value=False)
+
+    with patch("src.scheduler.worker.audit") as mock_audit, \
+         patch("src.scheduler.worker.get_pool") as mock_pool:
+        mock_audit.log = AsyncMock()
+        mock_pool.return_value.execute = AsyncMock(return_value=mock_execution)
+        await scheduler_tick(mock_store, mock_session_factory)
+
+    mock_pool.return_value.execute.assert_called_once()
+    mock_store.mark_executed.assert_called_once_with(mock_job)

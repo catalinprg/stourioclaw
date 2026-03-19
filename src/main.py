@@ -12,6 +12,7 @@ from src.mcp.registry import init_registry
 from src.config import settings
 from src.persistence import redis_store
 from src.orchestrator import core as orchestrator_module
+from src.scheduler.worker import run_scheduler_loop
 from src.models.schemas import OrchestratorInput, SignalSource, WebhookSignal
 from src.telemetry import setup_tracing
 
@@ -244,6 +245,9 @@ async def lifespan(app: FastAPI):
     consumer_task = asyncio.create_task(signal_consumer_worker())
     escalation_task = asyncio.create_task(approval_escalation_worker())
     auditor_task = asyncio.create_task(security_auditor_worker())
+    scheduler_task = asyncio.create_task(
+        run_scheduler_loop(async_session, settings.scheduler_tick_seconds)
+    )
 
     logger.info("Ready.")
     yield
@@ -252,7 +256,8 @@ async def lifespan(app: FastAPI):
     consumer_task.cancel()
     escalation_task.cancel()
     auditor_task.cancel()
-    for task in (consumer_task, escalation_task, auditor_task):
+    scheduler_task.cancel()
+    for task in (consumer_task, escalation_task, auditor_task, scheduler_task):
         try:
             await task
         except asyncio.CancelledError:
