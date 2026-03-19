@@ -6,7 +6,7 @@ from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Security, Depends
 from fastapi.security.api_key import APIKeyHeader
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -16,7 +16,8 @@ from src.models.schemas import (
     ApprovalDecision, Rule, new_id,
 )
 from src.persistence import audit
-from src.persistence.database import get_session, SecurityAlertModel
+from src.persistence.database import get_session, SecurityAlertModel, McpServerRecord
+from src.mcp.client import get_mcp_client_pool
 from src.persistence.redis_store import (
     activate_kill_switch, deactivate_kill_switch, is_killed, enqueue_signal,
     publish_daemon_event,
@@ -432,6 +433,120 @@ async def toggle_cron_job(
         raise HTTPException(status_code=404, detail=f"Cron job '{name}' not found.")
     await audit.log("CRON_TOGGLED", f"Cron job '{name}' -> active={active}")
     return {"name": name, "active": record.active}
+
+
+# =============================================================================
+# MCP SERVERS - External tool server connections
+# =============================================================================
+
+class McpServerCreateRequest(BaseModel):
+    name: str = Field(..., max_length=100)
+    endpoint_url: Optional[str] = None
+    endpoint_command: Optional[str] = None
+    transport: str = Field(..., pattern="^(sse|stdio)$")
+    auth_env_var: Optional[str] = None
+
+    @model_validator(mode="after")
+    def validate_endpoint(self):
+        if self.transport == "sse" and not self.endpoint_url:
+            raise ValueError("SSE transport requires endpoint_url")
+        if self.transport == "stdio" and not self.endpoint_command:
+            raise ValueError("stdio transport requires endpoint_command")
+        if self.endpoint_url and self.endpoint_command:
+            raise ValueError("Provide endpoint_url OR endpoint_command, not both")
+        return self
+
+
+@router.get("/mcp-servers")
+async def list_mcp_servers(session: AsyncSession = Depends(get_session)):
+    result = await session.execute(select(McpServerRecord).order_by(McpServerRecord.created_at.desc()))
+    servers = result.scalars().all()
+    pool = get_mcp_client_pool()
+    return [
+        {
+            "id": s.id,
+            "name": s.name,
+            "transport": s.transport,
+            "endpoint_url": s.endpoint_url,
+            "endpoint_command": s.endpoint_command,
+            "auth_env_var": s.auth_env_var,
+            "active": s.active,
+            "connected": pool.is_connected(s.name),
+            "tools": [t.name for t in pool.get_tools(s.name)],
+        }
+        for s in servers
+    ]
+
+
+@router.post("/mcp-servers", status_code=201)
+async def create_mcp_server(req: McpServerCreateRequest, session: AsyncSession = Depends(get_session)):
+    existing = await session.execute(select(McpServerRecord).where(McpServerRecord.name == req.name))
+    if existing.scalars().first():
+        raise HTTPException(status_code=409, detail=f"MCP server '{req.name}' already exists.")
+
+    if req.auth_env_var:
+        import os
+        if not os.environ.get(req.auth_env_var):
+            raise HTTPException(status_code=400, detail=f"Environment variable '{req.auth_env_var}' is not set.")
+
+    record = McpServerRecord(
+        id=new_id(),
+        name=req.name,
+        endpoint_url=req.endpoint_url,
+        endpoint_command=req.endpoint_command,
+        transport=req.transport,
+        auth_env_var=req.auth_env_var,
+    )
+    session.add(record)
+    await session.commit()
+
+    pool = get_mcp_client_pool()
+    connected = await pool.connect(req.name, {
+        "transport": req.transport,
+        "endpoint_url": req.endpoint_url,
+        "endpoint_command": req.endpoint_command,
+        "auth_env_var": req.auth_env_var,
+    })
+
+    await audit.log("MCP_SERVER_CREATED", f"MCP server '{req.name}' registered (connected={connected})")
+    return {"id": record.id, "name": req.name, "connected": connected}
+
+
+@router.delete("/mcp-servers/{name}")
+async def delete_mcp_server(name: str, session: AsyncSession = Depends(get_session)):
+    result = await session.execute(select(McpServerRecord).where(McpServerRecord.name == name))
+    record = result.scalars().first()
+    if not record:
+        raise HTTPException(status_code=404, detail=f"MCP server '{name}' not found.")
+
+    pool = get_mcp_client_pool()
+    await pool.disconnect(name)
+
+    await session.delete(record)
+    await session.commit()
+    await audit.log("MCP_SERVER_DELETED", f"MCP server '{name}' removed")
+    return {"status": "deleted", "name": name}
+
+
+@router.post("/mcp-servers/{name}/refresh")
+async def refresh_mcp_server(name: str, session: AsyncSession = Depends(get_session)):
+    result = await session.execute(select(McpServerRecord).where(McpServerRecord.name == name))
+    record = result.scalars().first()
+    if not record:
+        raise HTTPException(status_code=404, detail=f"MCP server '{name}' not found.")
+
+    pool = get_mcp_client_pool()
+    await pool.disconnect(name)
+    connected = await pool.connect(name, {
+        "transport": record.transport,
+        "endpoint_url": record.endpoint_url,
+        "endpoint_command": record.endpoint_command,
+        "auth_env_var": record.auth_env_var,
+    })
+
+    tools = [t.name for t in pool.get_tools(name)]
+    await audit.log("MCP_SERVER_REFRESHED", f"MCP server '{name}' refreshed: {len(tools)} tools")
+    return {"name": name, "connected": connected, "tools": tools}
 
 
 # =============================================================================
