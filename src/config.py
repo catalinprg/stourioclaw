@@ -93,6 +93,10 @@ class Settings(BaseSettings):
     agent_concurrency_default: int = 3
     agent_concurrency_config: dict = {}
 
+    # Daemon agents
+    daemon_manager_enabled: bool = True
+    daemon_default_tick_seconds: int = 300
+
     # Browser automation
     browser_headless: bool = True
     browser_timeout_ms: int = 30000

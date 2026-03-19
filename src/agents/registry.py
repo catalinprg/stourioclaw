@@ -77,6 +77,15 @@ class AgentRegistry:
         await self.session.flush()
         return True
 
+    async def list_daemons(self) -> list[AgentModel]:
+        """Return all active daemon agents."""
+        result = await self.session.execute(
+            select(AgentModel)
+            .where(AgentModel.is_active == True)
+            .where(AgentModel.execution_mode == "daemon")
+        )
+        return result.scalars().all()
+
     async def seed_from_yaml(self, config_dir: str) -> int:
         """Seed agents from YAML files if DB is empty. Returns count seeded."""
         # Check if any agents exist already

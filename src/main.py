@@ -16,6 +16,7 @@ from src.scheduler.worker import run_scheduler_loop
 from src.browser.engine import shutdown_browser_pool
 from src.models.schemas import OrchestratorInput, SignalSource, WebhookSignal
 from src.telemetry import setup_tracing
+from src.daemons.manager import DaemonManager
 
 logging.basicConfig(
     level=getattr(logging, settings.log_level.upper()),
@@ -286,6 +287,12 @@ async def lifespan(app: FastAPI):
         run_scheduler_loop(async_session, settings.scheduler_tick_seconds)
     )
 
+    # 10. Daemon manager
+    daemon_manager = None
+    if settings.daemon_manager_enabled:
+        daemon_manager = DaemonManager()
+        await daemon_manager.start()
+
     logger.info("Ready.")
     yield
     logger.info("Shutting down.")
@@ -299,6 +306,10 @@ async def lifespan(app: FastAPI):
             await task
         except asyncio.CancelledError:
             pass
+
+    # Stop daemons gracefully
+    if daemon_manager:
+        await daemon_manager.stop()
 
     # Cleanup browser pool
     await shutdown_browser_pool()

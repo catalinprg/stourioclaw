@@ -70,3 +70,41 @@ async def test_is_in_active_hours():
     # Full-day window should always be active
     config = {"start": "00:00", "end": "23:59"}
     assert is_in_active_hours(config) is True
+
+
+@pytest.mark.asyncio
+async def test_daemon_manager_starts_active_daemons():
+    from src.daemons.manager import DaemonManager
+
+    mock_agent = MagicMock()
+    mock_agent.name = "test-daemon"
+    mock_agent.daemon_config = {"tick_seconds": 60, "heartbeat_prompt": "check"}
+
+    async def blocking_daemon_loop(name, config, stopping, on_cycle_complete=None):
+        """Simulate a daemon loop that blocks until stop_event is set."""
+        await stopping.wait()
+
+    mock_pubsub = AsyncMock()
+    mock_pubsub.subscribe = AsyncMock()
+    mock_pubsub.get_message = AsyncMock(return_value=None)
+    mock_pubsub.unsubscribe = AsyncMock()
+    mock_pubsub.close = AsyncMock()
+
+    with patch("src.daemons.manager.async_session") as mock_sf, \
+         patch("src.daemons.manager.AgentRegistry") as mock_reg_cls, \
+         patch("src.daemons.manager.run_daemon_loop", side_effect=blocking_daemon_loop), \
+         patch("src.daemons.manager.audit") as mock_audit, \
+         patch("src.daemons.manager.get_pubsub_connection", new_callable=AsyncMock, return_value=mock_pubsub):
+        mock_audit.log = AsyncMock()
+        mock_session = AsyncMock()
+        mock_sf.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_sf.return_value.__aexit__ = AsyncMock(return_value=False)
+        mock_reg = AsyncMock()
+        mock_reg.list_daemons = AsyncMock(return_value=[mock_agent])
+        mock_reg_cls.return_value = mock_reg
+
+        manager = DaemonManager()
+        await manager.start()
+
+        assert "test-daemon" in manager._tasks
+        await manager.stop()
