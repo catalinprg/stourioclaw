@@ -21,6 +21,7 @@ def register_all_tools() -> None:
     from src.mcp.tools.api import call_api
     from src.mcp.tools.notification import send_notification
     from src.mcp.tools.report import generate_report
+    from src.mcp.tools.delegate import delegate_to_agent
 
     # --- web_search ---
     register_tool(
@@ -266,5 +267,34 @@ def register_all_tools() -> None:
             },
         },
     )(generate_report)
+
+    # --- delegate_to_agent ---
+    register_tool(
+        registry=tool_registry,
+        name="delegate_to_agent",
+        description="Delegate a task to another agent and receive its result. Use when your task requires expertise from a different agent.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "agent_type": {
+                    "type": "string",
+                    "description": "Name of the agent to delegate to (e.g. 'analyst', 'code_writer', 'intel')",
+                },
+                "objective": {
+                    "type": "string",
+                    "description": "Clear objective for the sub-agent to accomplish",
+                },
+                "context": {
+                    "type": "string",
+                    "description": "Additional context or data the sub-agent needs",
+                },
+                "conversation_id": {
+                    "type": "string",
+                    "description": "Conversation ID for context continuity with the sub-agent",
+                },
+            },
+            "required": ["agent_type", "objective"],
+        },
+    )(delegate_to_agent)
 
     logger.info("Registered %d MCP tools", len(tool_registry.list_tools()))
