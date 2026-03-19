@@ -18,7 +18,8 @@ from src.models.schemas import (
 from src.persistence import audit
 from src.persistence.database import get_session, SecurityAlertModel
 from src.persistence.redis_store import (
-    activate_kill_switch, deactivate_kill_switch, is_killed, enqueue_signal
+    activate_kill_switch, deactivate_kill_switch, is_killed, enqueue_signal,
+    publish_daemon_event,
 )
 from src.guardrails.approvals import (
     resolve_approval, get_pending_approvals,
@@ -220,6 +221,10 @@ class AgentCreateRequest(BaseModel):
     tools: list[str] = Field(default_factory=list)
     max_steps: int = Field(default=8, ge=1, le=50)
     max_concurrent: int = Field(default=3, ge=1, le=20)
+    execution_mode: str = Field(default="oneshot", pattern="^(oneshot|daemon)$")
+    daemon_config: Optional[dict] = None
+    mcp_servers: list[str] = Field(default_factory=list)
+    allowed_peers: list[str] = Field(default_factory=list)
 
 
 class AgentUpdateRequest(BaseModel):
@@ -231,6 +236,10 @@ class AgentUpdateRequest(BaseModel):
     max_steps: Optional[int] = Field(default=None, ge=1, le=50)
     max_concurrent: Optional[int] = Field(default=None, ge=1, le=20)
     is_active: Optional[bool] = None
+    execution_mode: Optional[str] = Field(default=None, pattern="^(oneshot|daemon)$")
+    daemon_config: Optional[dict] = None
+    mcp_servers: Optional[list[str]] = None
+    allowed_peers: Optional[list[str]] = None
 
 
 class AlertStatusUpdate(BaseModel):
@@ -249,6 +258,10 @@ def _agent_to_dict(agent) -> dict:
         "max_concurrent": agent.max_concurrent,
         "is_active": agent.is_active,
         "is_system": agent.is_system,
+        "execution_mode": agent.execution_mode,
+        "daemon_config": agent.daemon_config,
+        "mcp_servers": agent.mcp_servers,
+        "allowed_peers": agent.allowed_peers,
     }
 
 
@@ -277,6 +290,10 @@ async def create_agent(
         tools=req.tools,
         max_steps=req.max_steps,
         max_concurrent=req.max_concurrent,
+        execution_mode=req.execution_mode,
+        daemon_config=req.daemon_config,
+        mcp_servers=req.mcp_servers,
+        allowed_peers=req.allowed_peers,
     )
     await session.commit()
     await audit.log("AGENT_CREATED", f"Agent '{req.name}' created via API")
@@ -316,6 +333,43 @@ async def delete_agent(
     await session.commit()
     await audit.log("AGENT_DELETED", f"Agent '{name}' deleted via API")
     return {"status": "deleted", "name": name}
+
+
+# =============================================================================
+# DAEMONS - Runtime control
+# =============================================================================
+
+@router.post("/daemons/{name}/start")
+async def start_daemon(name: str, session: AsyncSession = Depends(get_session)):
+    registry = AgentRegistry(session)
+    agent = await registry.get_by_name(name)
+    if not agent:
+        raise HTTPException(status_code=404, detail=f"Agent '{name}' not found.")
+    if agent.execution_mode != "daemon":
+        raise HTTPException(status_code=400, detail=f"Agent '{name}' is not a daemon.")
+    await publish_daemon_event("start", name)
+    await audit.log("DAEMON_CONTROL", f"Daemon '{name}' start requested via API")
+    return {"status": "starting", "name": name}
+
+
+@router.post("/daemons/{name}/stop")
+async def stop_daemon(name: str):
+    await publish_daemon_event("stop", name)
+    await audit.log("DAEMON_CONTROL", f"Daemon '{name}' stop requested via API")
+    return {"status": "stopping", "name": name}
+
+
+@router.post("/daemons/{name}/restart")
+async def restart_daemon(name: str, session: AsyncSession = Depends(get_session)):
+    registry = AgentRegistry(session)
+    agent = await registry.get_by_name(name)
+    if not agent:
+        raise HTTPException(status_code=404, detail=f"Agent '{name}' not found.")
+    if agent.execution_mode != "daemon":
+        raise HTTPException(status_code=400, detail=f"Agent '{name}' is not a daemon.")
+    await publish_daemon_event("restart", name)
+    await audit.log("DAEMON_CONTROL", f"Daemon '{name}' restart requested via API")
+    return {"status": "restarting", "name": name}
 
 
 # =============================================================================
