@@ -5,7 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Stourio Admin</title>
 
-    <link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@400;600&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -18,20 +19,19 @@
             theme: {
                 extend: {
                     colors: {
-                        stourio: {
-                            bg: '#f4f1e8',
-                            primary: '#1a1a1a',
-                            secondary: '#6b6b6b',
-                            accent: '#2e2e2e',
-                            border: '#d8d4c8',
-                            red: '#8b0000',
-                            green: '#2d5a27',
-                            orange: '#c65d00',
-                            yellow: '#b8860b'
+                        bg: { 900: '#0e1018', 800: '#161926', 700: '#1c1f30', 600: '#222540' },
+                        border: '#252840',
+                        accent: '#38bdf8',
+                        txt: { primary: '#c8d4e8', secondary: '#9aaac0', muted: '#5a6882' },
+                        st: {
+                            red: '#ef4444',
+                            green: '#34d399',
+                            orange: '#f97316',
+                            yellow: '#eab308'
                         }
                     },
                     fontFamily: {
-                        serif: ['Crimson Pro', 'serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
                         sans: ['DM Sans', 'sans-serif']
                     }
                 }
@@ -39,38 +39,68 @@
         }
     </script>
     <style>
-        body { background-color: #f4f1e8; color: #1a1a1a; font-family: 'DM Sans', sans-serif; }
-        h1, h2, h3, h4, h5, h6 { font-family: 'Crimson Pro', serif; }
-        .card { background: white; border: 1px solid #d8d4c8; border-radius: 4px; padding: 1.5rem; }
-        .input-field { width: 100%; border: 1px solid #d8d4c8; padding: 0.5rem; border-radius: 4px; background: white; margin-bottom: 1rem; }
-        .btn { padding: 0.5rem 1rem; border-radius: 4px; font-weight: 500; cursor: pointer; transition: all 0.2s; }
-        .btn-primary { background: #2e2e2e; color: white; border: 1px solid #2e2e2e; }
-        .btn-danger { background: #8b0000; color: white; border: 1px solid #8b0000; }
-        .btn-outline { background: transparent; color: #2e2e2e; border: 1px solid #2e2e2e; }
+        body { background: #0e1018; color: #c8d4e8; font-family: 'DM Sans', sans-serif; }
+        .mono { font-family: 'JetBrains Mono', monospace; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #0e1018; }
+        ::-webkit-scrollbar-thumb { background: #2a2d42; border-radius: 3px; }
+        .card { background: #161926; border: 1px solid #252840; border-radius: 8px; padding: 1.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.3); }
+        .input-field { width: 100%; background: #1c1f30; border: 1px solid #2a2d42; border-radius: 6px; color: #c8d4e8; font-size: 13px; padding: 8px 12px; outline: none; transition: border-color 0.15s; margin-bottom: 1rem; }
+        .input-field:focus { border-color: #38bdf8; }
+        .input-field::placeholder { color: #4a5568; }
+        .btn { padding: 0.5rem 1rem; border-radius: 6px; font-weight: 500; cursor: pointer; transition: all 0.15s; font-size: 0.875rem; border: 1px solid transparent; }
+        .btn-primary { background: #38bdf8; color: #0e1018; border-color: #38bdf8; }
+        .btn-primary:hover { background: #22d3ee; border-color: #22d3ee; }
+        .btn-danger { background: #dc2626; color: #fff; border-color: #dc2626; }
+        .btn-danger:hover { background: #ef4444; border-color: #ef4444; }
+        .btn-outline { background: transparent; color: #9aaac0; border: 1px solid #2a2d42; }
+        .btn-outline:hover { border-color: #38bdf8; color: #c8d4e8; }
         .btn-sm { padding: 0.25rem 0.5rem; font-size: 0.75rem; }
-        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn:disabled { opacity: 0.4; cursor: not-allowed; }
         table { width: 100%; text-align: left; border-collapse: collapse; }
-        th, td { padding: 0.75rem; border-bottom: 1px solid #d8d4c8; }
-        th { font-family: 'Crimson Pro', serif; font-weight: 600; color: #6b6b6b; }
+        th, td { padding: 0.75rem; border-bottom: 1px solid #252840; }
+        th { font-weight: 600; color: #5a6882; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; font-family: 'JetBrains Mono', monospace; }
+        td { color: #c8d4e8; }
         textarea.input-field { min-height: 100px; resize: vertical; }
-        .badge { display: inline-block; padding: 0.125rem 0.5rem; border-radius: 9999px; font-size: 0.7rem; font-weight: 600; text-transform: uppercase; }
-        .badge-low { background: #d1fae5; color: #065f46; }
-        .badge-medium { background: #fef3c7; color: #92400e; }
-        .badge-high { background: #fed7aa; color: #9a3412; }
-        .badge-critical { background: #fecaca; color: #991b1b; }
+        select.input-field { appearance: auto; }
+        .badge { display: inline-block; padding: 0.125rem 0.5rem; border-radius: 9999px; font-size: 0.65rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+        .badge-low { background: rgba(52,211,153,0.15); color: #34d399; }
+        .badge-medium { background: rgba(234,179,8,0.15); color: #eab308; }
+        .badge-high { background: rgba(249,115,22,0.15); color: #f97316; }
+        .badge-critical { background: rgba(239,68,68,0.15); color: #ef4444; }
         .toggle { position: relative; display: inline-block; width: 36px; height: 20px; }
         .toggle input { opacity: 0; width: 0; height: 0; }
-        .toggle-slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #d8d4c8; border-radius: 20px; transition: 0.2s; }
-        .toggle-slider:before { content: ""; position: absolute; height: 14px; width: 14px; left: 3px; bottom: 3px; background-color: white; border-radius: 50%; transition: 0.2s; }
-        .toggle input:checked + .toggle-slider { background-color: #2d5a27; }
-        .toggle input:checked + .toggle-slider:before { transform: translateX(16px); }
+        .toggle-slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #2a2d42; border-radius: 20px; transition: 0.2s; }
+        .toggle-slider:before { content: ""; position: absolute; height: 14px; width: 14px; left: 3px; bottom: 3px; background-color: #5a6882; border-radius: 50%; transition: 0.2s; }
+        .toggle input:checked + .toggle-slider { background-color: #065f46; }
+        .toggle input:checked + .toggle-slider:before { transform: translateX(16px); background-color: #34d399; }
+        .sidebar-item { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 6px; font-size: 13px; font-weight: 500; color: #9aaac0; cursor: pointer; transition: background 0.15s, color 0.15s; border: none; background: none; width: 100%; text-align: left; }
+        .sidebar-item:hover { background: #1c1f30; color: #c8d4e8; }
+        .sidebar-item.active { background: #1e2235; color: #38bdf8; box-shadow: 0 1px 3px rgba(0,0,0,0.4); }
+        .fade-in { animation: fadeIn 0.2s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+        tr:hover td { background: #1c1f30; }
     </style>
 </head>
-<body>
+<body class="min-h-screen">
     <div id="root"></div>
 
     <script type="text/babel">
         const { useState, useEffect, useRef } = React;
+
+        // SVG icons for sidebar
+        const icons = {
+            console: <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="1" y="2" width="14" height="12" rx="2" stroke="currentColor" strokeWidth="1.4"/><line x1="1" y1="6" x2="15" y2="6" stroke="currentColor" strokeWidth="1.4"/><polyline points="3.5,9.5 5.5,11.5 3.5,13.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>,
+            agents: <svg width="14" height="14" viewBox="0 0 11 8" xmlns="http://www.w3.org/2000/svg"><path fill="currentColor" d="M1 0h9v2h1v4H10v2H9V6H8v2H7V6H4v2H3V6H2v2H1V6H0V2h1V0z M2 2h1v1H2V2z M8 2h1v1H8V2z" fillRule="evenodd"/></svg>,
+            security: <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 1L2 4v4c0 3.5 2.5 6.5 6 7.5 3.5-1 6-4 6-7.5V4L8 1z" stroke="currentColor" strokeWidth="1.3" fill="none"/></svg>,
+            telegram: <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M14.5 1.5L1 7l4 1.5M14.5 1.5L10 14.5l-5-6M14.5 1.5L5 8.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/></svg>,
+            rules: <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="2" y="1" width="12" height="14" rx="1.5" stroke="currentColor" strokeWidth="1.2"/><line x1="5" y1="5" x2="11" y2="5" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round"/><line x1="5" y1="8" x2="11" y2="8" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round"/><line x1="5" y1="11" x2="9" y2="11" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round"/></svg>,
+            audit: <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M4 1h8v14H4V1z" stroke="currentColor" strokeWidth="1.2"/><line x1="6" y1="4" x2="10" y2="4" stroke="currentColor" strokeWidth="1" strokeLinecap="round"/><line x1="6" y1="6.5" x2="10" y2="6.5" stroke="currentColor" strokeWidth="1" strokeLinecap="round"/><line x1="6" y1="9" x2="10" y2="9" stroke="currentColor" strokeWidth="1" strokeLinecap="round"/></svg>,
+            cron: <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6.5" stroke="currentColor" strokeWidth="1.3"/><path d="M8 4.5v3.5l2.5 1.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/></svg>,
+            mcp: <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="1" y="5" width="5" height="6" rx="1" stroke="currentColor" strokeWidth="1.2"/><rect x="10" y="5" width="5" height="6" rx="1" stroke="currentColor" strokeWidth="1.2"/><line x1="6" y1="8" x2="10" y2="8" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/></svg>,
+            cost: <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6.5" stroke="currentColor" strokeWidth="1.3"/><text x="8" y="11.5" textAnchor="middle" fontSize="8.5" fontWeight="700" fill="currentColor" fontFamily="sans-serif">$</text></svg>,
+            deployment: <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="1" y="7" width="3" height="7" rx="0.5" fill="currentColor"/><rect x="6" y="4" width="3" height="10" rx="0.5" fill="currentColor"/><rect x="11" y="1" width="3" height="13" rx="0.5" fill="currentColor"/></svg>,
+        };
 
         function App() {
             const [apiKey, setApiKey] = useState(sessionStorage.getItem('stourio_key') || '');
@@ -110,8 +140,8 @@
                 return (
                     <div className="min-h-screen flex items-center justify-center">
                         <div className="card w-96 max-w-full">
-                            <h2 className="text-2xl mb-2">Stourio Authentication</h2>
-                            <p className="text-stourio-secondary mb-4 text-sm">Enter your X-STOURIO-KEY to access the command panel.</p>
+                            <h2 className="text-xl font-semibold mb-2 text-txt-primary">Stourio Authentication</h2>
+                            <p className="text-txt-secondary mb-4 text-sm">Enter your X-STOURIO-KEY to access the command panel.</p>
                             <input type="password" id="keyInput" className="input-field" placeholder="API Key" />
                             <button className="btn btn-primary w-full" onClick={() => {
                                 const val = document.getElementById('keyInput').value;
@@ -123,71 +153,99 @@
             }
 
             const navItems = [
-                { key: 'console', label: 'Console' },
-                { key: 'agents', label: 'Agents' },
-                { key: 'security', label: 'Security' },
-                { key: 'telegram', label: 'Telegram' },
-                { key: 'rules', label: 'Rules' },
-                { key: 'audit', label: 'Audit' },
-                { key: 'cron', label: 'Cron Jobs' },
-                { key: 'mcp', label: 'MCP Servers' },
-                { key: 'cost', label: 'Costs' },
-                { key: 'deployment', label: 'Deployment' },
+                { key: 'console', label: 'Console', icon: icons.console },
+                { key: 'agents', label: 'Agents', icon: icons.agents },
+                { key: 'security', label: 'Security', icon: icons.security },
+                { key: 'telegram', label: 'Telegram', icon: icons.telegram },
+                { key: 'rules', label: 'Rules', icon: icons.rules },
+                { key: 'audit', label: 'Audit', icon: icons.audit },
+                { key: 'cron', label: 'Cron Jobs', icon: icons.cron },
+                { key: 'mcp', label: 'MCP Servers', icon: icons.mcp },
+                { key: 'cost', label: 'Costs', icon: icons.cost },
+                { key: 'deployment', label: 'Deployment', icon: icons.deployment },
             ];
 
             return (
-                <div className="max-w-[1200px] mx-auto p-6">
-                    {/* Header */}
-                    <div className="flex justify-between items-end border-b border-stourio-border pb-4 mb-6">
-                        <div>
-                            <h1 className="text-4xl font-semibold text-stourio-primary tracking-tight">Stourio</h1>
-                            <div className="flex gap-4 mt-4 text-sm font-medium text-stourio-secondary items-center flex-wrap">
-                                {navItems.map(item => (
-                                    <button key={item.key} onClick={() => setView(item.key)} className={view === item.key ? 'text-stourio-primary underline underline-offset-4' : ''}>{item.label}</button>
-                                ))}
-
-                                {/* Refresh */}
-                                <button onClick={() => { setRefreshKey(k => k + 1); api('/api/status').then(setStatus).catch(console.error); }} className="hover:text-stourio-primary" title="Refresh current view">&#8635; Refresh</button>
-
-                                {/* Divider */}
-                                <div className="w-px h-4 bg-stourio-border mx-2"></div>
-
-                                {/* External Links */}
-                                <a href="/docs" target="_blank" rel="noopener noreferrer" className="hover:text-stourio-primary flex items-center gap-1" title="Swagger UI">
-                                    API Docs <span className="text-xs font-serif">&#8599;</span>
-                                </a>
-                                <a href="http://localhost:16686" target="_blank" rel="noopener noreferrer" className="hover:text-stourio-primary flex items-center gap-1" title="OpenTelemetry Traces">
-                                    Tracing <span className="text-xs font-serif">&#8599;</span>
-                                </a>
-                            </div>
+                <div className="min-h-screen flex flex-col">
+                    {/* Top Header Bar */}
+                    <header className="border-b border-border px-6 py-3 flex items-center justify-between bg-bg-800 shrink-0">
+                        <div className="flex items-center gap-3">
+                            <span className="font-semibold text-lg tracking-tight text-txt-primary">Stourio</span>
+                            <span className="text-txt-muted text-xs mono">Admin Panel</span>
                         </div>
-                        <div className="flex items-center gap-4">
+                        <div className="flex items-center gap-3">
+                            {/* Refresh */}
+                            <button onClick={() => { setRefreshKey(k => k + 1); api('/api/status').then(setStatus).catch(console.error); }}
+                                className="text-txt-secondary hover:text-accent transition text-sm mono border border-border rounded px-3 py-1 hover:border-accent" title="Refresh current view">
+                                refresh
+                            </button>
+
+                            {/* API Docs */}
+                            <a href="/docs" target="_blank" rel="noopener noreferrer"
+                                className="text-txt-secondary hover:text-accent transition text-sm mono border border-border rounded px-3 py-1 hover:border-accent">
+                                API Docs &#8599;
+                            </a>
+
+                            {/* Tracing */}
+                            <a href="http://localhost:16686" target="_blank" rel="noopener noreferrer"
+                                className="text-txt-secondary hover:text-accent transition text-sm mono border border-border rounded px-3 py-1 hover:border-accent">
+                                Tracing &#8599;
+                            </a>
+
+                            {/* Divider */}
+                            <div className="w-px h-5 bg-border mx-1"></div>
+
+                            {/* Status */}
                             {status && (
-                                <div className="text-sm font-medium">
-                                    Status: <span className={status.kill_switch ? 'text-stourio-red' : 'text-stourio-green'}>
-                                        {status.status.toUpperCase()}
-                                    </span>
-                                </div>
+                                <span className="text-xs mono px-2 py-1 rounded" style={{
+                                    background: status.kill_switch ? 'rgba(239,68,68,0.15)' : 'rgba(52,211,153,0.15)',
+                                    color: status.kill_switch ? '#ef4444' : '#34d399',
+                                    border: `1px solid ${status.kill_switch ? '#7f1d1d' : '#065f46'}`
+                                }}>
+                                    {status.status.toUpperCase()}
+                                </span>
                             )}
+
+                            {/* Kill Switch */}
                             <button
                                 onClick={toggleKillSwitch}
-                                className={`btn ${status?.kill_switch ? 'btn-outline border-stourio-red text-stourio-red' : 'btn-danger'}`}>
-                                {status?.kill_switch ? 'RESUME OPERATIONS' : 'HALT SYSTEM'}
+                                className={`btn ${status?.kill_switch ? 'btn-outline border-st-red text-st-red hover:bg-st-red/10' : 'btn-danger'}`}>
+                                {status?.kill_switch ? 'RESUME' : 'HALT'}
                             </button>
                         </div>
-                    </div>
+                    </header>
 
-                    {/* Views */}
-                    {view === 'console' && <ConsoleView key={refreshKey} api={api} />}
-                    {view === 'agents' && <AgentManager key={refreshKey} api={api} />}
-                    {view === 'security' && <SecurityFeed key={refreshKey} api={api} />}
-                    {view === 'telegram' && <TelegramViewer key={refreshKey} api={api} />}
-                    {view === 'rules' && <RulesView key={refreshKey} api={api} />}
-                    {view === 'audit' && <AuditView key={refreshKey} api={api} />}
-                    {view === 'cron' && <CronJobsView key={refreshKey} api={api} />}
-                    {view === 'mcp' && <McpServersView key={refreshKey} api={api} />}
-                    {view === 'cost' && <CostView key={refreshKey} api={api} />}
-                    {view === 'deployment' && <DeploymentManager key={refreshKey} api={api} status={status} />}
+                    <div className="flex flex-1" style={{ minHeight: 'calc(100vh - 53px)' }}>
+                        {/* Left Sidebar */}
+                        <nav className="w-48 shrink-0 border-r border-border bg-bg-900 flex flex-col gap-1 p-3">
+                            {navItems.map(item => (
+                                <button
+                                    key={item.key}
+                                    onClick={() => setView(item.key)}
+                                    className={`sidebar-item ${view === item.key ? 'active' : ''}`}
+                                >
+                                    {item.icon}
+                                    {item.label}
+                                </button>
+                            ))}
+                        </nav>
+
+                        {/* Main Content */}
+                        <main className="flex-1 p-6 overflow-auto">
+                            <div className="fade-in">
+                                {view === 'console' && <ConsoleView key={refreshKey} api={api} />}
+                                {view === 'agents' && <AgentManager key={refreshKey} api={api} />}
+                                {view === 'security' && <SecurityFeed key={refreshKey} api={api} />}
+                                {view === 'telegram' && <TelegramViewer key={refreshKey} api={api} />}
+                                {view === 'rules' && <RulesView key={refreshKey} api={api} />}
+                                {view === 'audit' && <AuditView key={refreshKey} api={api} />}
+                                {view === 'cron' && <CronJobsView key={refreshKey} api={api} />}
+                                {view === 'mcp' && <McpServersView key={refreshKey} api={api} />}
+                                {view === 'cost' && <CostView key={refreshKey} api={api} />}
+                                {view === 'deployment' && <DeploymentManager key={refreshKey} api={api} status={status} />}
+                            </div>
+                        </main>
+                    </div>
                 </div>
             );
         }
@@ -216,45 +274,45 @@
                     {/* System Status */}
                     <div className="col-span-2">
                         <div className="card mb-6">
-                            <h3 className="text-xl mb-4">System Status</h3>
+                            <h3 className="text-sm font-semibold text-txt-muted uppercase tracking-wider mono mb-4">System Status</h3>
                             {systemStatus ? (
                                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                                     <div>
-                                        <p className="text-xs text-stourio-secondary mb-1">Status</p>
-                                        <p className={`text-lg font-serif font-semibold ${systemStatus.kill_switch ? 'text-stourio-red' : 'text-stourio-green'}`}>{systemStatus.status?.toUpperCase()}</p>
+                                        <p className="text-xs text-txt-muted mb-1 mono">Status</p>
+                                        <p className={`text-lg font-bold ${systemStatus.kill_switch ? 'text-st-red' : 'text-st-green'}`}>{systemStatus.status?.toUpperCase()}</p>
                                     </div>
                                     <div>
-                                        <p className="text-xs text-stourio-secondary mb-1">Uptime</p>
-                                        <p className="text-lg font-serif font-semibold">{systemStatus.uptime || '--'}</p>
+                                        <p className="text-xs text-txt-muted mb-1 mono">Uptime</p>
+                                        <p className="text-lg font-bold text-txt-primary">{systemStatus.uptime || '--'}</p>
                                     </div>
                                     <div>
-                                        <p className="text-xs text-stourio-secondary mb-1">Active Agents</p>
-                                        <p className="text-lg font-serif font-semibold">{systemStatus.pool ? Object.keys(systemStatus.pool).length : 0}</p>
+                                        <p className="text-xs text-txt-muted mb-1 mono">Active Agents</p>
+                                        <p className="text-lg font-bold text-txt-primary">{systemStatus.pool ? Object.keys(systemStatus.pool).length : 0}</p>
                                     </div>
                                     <div>
-                                        <p className="text-xs text-stourio-secondary mb-1">Kill Switch</p>
-                                        <p className={`text-lg font-serif font-semibold ${systemStatus.kill_switch ? 'text-stourio-red' : 'text-stourio-green'}`}>{systemStatus.kill_switch ? 'ENGAGED' : 'OFF'}</p>
+                                        <p className="text-xs text-txt-muted mb-1 mono">Kill Switch</p>
+                                        <p className={`text-lg font-bold ${systemStatus.kill_switch ? 'text-st-red' : 'text-st-green'}`}>{systemStatus.kill_switch ? 'ENGAGED' : 'OFF'}</p>
                                     </div>
                                 </div>
-                            ) : <p className="text-sm text-stourio-secondary">Loading...</p>}
+                            ) : <p className="text-sm text-txt-secondary">Loading...</p>}
                         </div>
                     </div>
 
                     {/* Approvals Column */}
                     <div className="flex flex-col h-[70vh] overflow-y-auto">
-                        <h3 className="text-xl mb-4 border-b border-stourio-border pb-2">Pending Approvals</h3>
-                        {approvals.length === 0 && <p className="text-sm text-stourio-secondary">No pending actions.</p>}
+                        <h3 className="text-sm font-semibold text-txt-muted uppercase tracking-wider mono mb-4 border-b border-border pb-2">Pending Approvals</h3>
+                        {approvals.length === 0 && <p className="text-sm text-txt-secondary">No pending actions.</p>}
                         {approvals.map(app => (
-                            <div key={app.id} className="card mb-4 border-l-4 border-l-stourio-red">
+                            <div key={app.id} className="card mb-4 border-l-4 border-l-st-red">
                                 <div className="flex justify-between items-start mb-2">
-                                    <span className="text-xs font-bold bg-stourio-red/10 text-stourio-red px-2 py-1 rounded">RISK: {app.risk_level.toUpperCase()}</span>
-                                    <span className="text-xs text-stourio-secondary">Expires: {new Date(app.expires_at).toLocaleTimeString()}</span>
+                                    <span className="text-xs font-bold px-2 py-1 rounded" style={{ background: 'rgba(239,68,68,0.15)', color: '#ef4444' }}>RISK: {app.risk_level.toUpperCase()}</span>
+                                    <span className="text-xs text-txt-muted">Expires: {new Date(app.expires_at).toLocaleTimeString()}</span>
                                 </div>
-                                <p className="text-sm font-medium mb-2">{app.action_description}</p>
-                                <p className="text-xs text-stourio-secondary mb-4 bg-stourio-bg p-2 rounded font-mono break-all">{app.blast_radius}</p>
+                                <p className="text-sm font-medium mb-2 text-txt-primary">{app.action_description}</p>
+                                <p className="text-xs text-txt-secondary mb-4 bg-bg-700 p-2 rounded mono break-all">{app.blast_radius}</p>
                                 <div className="flex gap-2">
                                     <button onClick={() => handleApproval(app.id, true)} className="btn btn-primary text-sm flex-1">Authorize</button>
-                                    <button onClick={() => handleApproval(app.id, false)} className="btn btn-outline border-stourio-border text-sm flex-1">Reject</button>
+                                    <button onClick={() => handleApproval(app.id, false)} className="btn btn-outline text-sm flex-1">Reject</button>
                                 </div>
                             </div>
                         ))}
@@ -342,7 +400,7 @@
             return (
                 <div>
                     <div className="flex justify-between items-center mb-6">
-                        <h3 className="text-xl">Agent Manager</h3>
+                        <h3 className="text-sm font-semibold text-txt-muted uppercase tracking-wider mono">Agent Manager</h3>
                         <button onClick={() => { resetForm(); setShowForm(!showForm); }} className="btn btn-primary text-sm">
                             {showForm ? 'Cancel' : 'Create Agent'}
                         </button>
@@ -351,50 +409,50 @@
                     {/* Create/Edit Form */}
                     {showForm && (
                         <div className="card mb-6">
-                            <h4 className="text-lg mb-4">{editAgent ? `Edit: ${editAgent}` : 'New Agent'}</h4>
+                            <h4 className="text-base font-semibold mb-4 text-txt-primary">{editAgent ? `Edit: ${editAgent}` : 'New Agent'}</h4>
                             <form onSubmit={handleSubmit}>
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
-                                        <label className="text-xs text-stourio-secondary">Name (slug)</label>
+                                        <label className="text-xs text-txt-muted mono mb-1 block">Name (slug)</label>
                                         <input className="input-field text-sm" value={form.name} onChange={e => setForm({...form, name: e.target.value})} required disabled={!!editAgent} />
                                     </div>
                                     <div>
-                                        <label className="text-xs text-stourio-secondary">Display Name</label>
+                                        <label className="text-xs text-txt-muted mono mb-1 block">Display Name</label>
                                         <input className="input-field text-sm" value={form.display_name} onChange={e => setForm({...form, display_name: e.target.value})} />
                                     </div>
                                     <div>
-                                        <label className="text-xs text-stourio-secondary">Model</label>
-                                        <input className="input-field text-sm font-mono" value={form.model} onChange={e => setForm({...form, model: e.target.value})} placeholder="claude-sonnet-4-20250514" />
+                                        <label className="text-xs text-txt-muted mono mb-1 block">Model</label>
+                                        <input className="input-field text-sm mono" value={form.model} onChange={e => setForm({...form, model: e.target.value})} placeholder="claude-sonnet-4-20250514" />
                                     </div>
                                     <div>
-                                        <label className="text-xs text-stourio-secondary">Description</label>
+                                        <label className="text-xs text-txt-muted mono mb-1 block">Description</label>
                                         <input className="input-field text-sm" value={form.description} onChange={e => setForm({...form, description: e.target.value})} />
                                     </div>
                                 </div>
                                 <div>
-                                    <label className="text-xs text-stourio-secondary">System Prompt</label>
-                                    <textarea className="input-field text-sm font-mono" value={form.system_prompt} onChange={e => setForm({...form, system_prompt: e.target.value})} />
+                                    <label className="text-xs text-txt-muted mono mb-1 block">System Prompt</label>
+                                    <textarea className="input-field text-sm mono" value={form.system_prompt} onChange={e => setForm({...form, system_prompt: e.target.value})} />
                                 </div>
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
-                                        <label className="text-xs text-stourio-secondary">Max Steps</label>
+                                        <label className="text-xs text-txt-muted mono mb-1 block">Max Steps</label>
                                         <input type="number" className="input-field text-sm" value={form.max_steps} onChange={e => setForm({...form, max_steps: e.target.value})} />
                                     </div>
                                     <div>
-                                        <label className="text-xs text-stourio-secondary">Max Concurrent</label>
+                                        <label className="text-xs text-txt-muted mono mb-1 block">Max Concurrent</label>
                                         <input type="number" className="input-field text-sm" value={form.max_concurrent} onChange={e => setForm({...form, max_concurrent: e.target.value})} />
                                     </div>
                                 </div>
                                 <div>
-                                    <label className="text-xs text-stourio-secondary">Tools</label>
+                                    <label className="text-xs text-txt-muted mono mb-1 block">Tools</label>
                                     <div className="flex gap-2 mb-2">
                                         <input className="input-field text-sm mb-0 flex-1" value={toolInput} onChange={e => setToolInput(e.target.value)} placeholder="Tool name" onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addTool(); }}} />
                                         <button type="button" onClick={addTool} className="btn btn-outline btn-sm">Add</button>
                                     </div>
                                     <div className="flex flex-wrap gap-1 mb-4">
                                         {form.tools.map(t => (
-                                            <span key={t} className="bg-stourio-bg px-2 py-1 rounded text-xs flex items-center gap-1">
-                                                {t} <button type="button" onClick={() => removeTool(t)} className="text-stourio-red font-bold">&times;</button>
+                                            <span key={t} className="bg-bg-700 px-2 py-1 rounded text-xs flex items-center gap-1 text-txt-secondary border border-border">
+                                                {t} <button type="button" onClick={() => removeTool(t)} className="text-st-red font-bold">&times;</button>
                                             </span>
                                         ))}
                                     </div>
@@ -412,33 +470,33 @@
                                 {agents.map(a => (
                                     <tr key={a.name}>
                                         <td>
-                                            <span className="font-medium">{a.display_name || a.name}</span>
-                                            {a.display_name && <span className="block text-xs text-stourio-secondary font-mono">{a.name}</span>}
+                                            <span className="font-medium text-txt-primary">{a.display_name || a.name}</span>
+                                            {a.display_name && <span className="block text-xs text-txt-muted mono">{a.name}</span>}
                                         </td>
-                                        <td className="font-mono text-xs">{a.model || '--'}</td>
+                                        <td className="mono text-xs text-txt-secondary">{a.model || '--'}</td>
                                         <td>
                                             <span className={`badge ${a.active !== false ? 'badge-low' : 'badge-medium'}`}>
                                                 {a.active !== false ? 'active' : 'inactive'}
                                             </span>
                                         </td>
-                                        <td className="text-xs">{(a.tools || []).length > 0 ? a.tools.slice(0, 3).join(', ') + (a.tools.length > 3 ? ` +${a.tools.length - 3}` : '') : '--'}</td>
+                                        <td className="text-xs text-txt-secondary">{(a.tools || []).length > 0 ? a.tools.slice(0, 3).join(', ') + (a.tools.length > 3 ? ` +${a.tools.length - 3}` : '') : '--'}</td>
                                         <td className="whitespace-nowrap">
-                                            <button onClick={() => startEdit(a)} className="text-xs underline mr-2">Edit</button>
-                                            <button onClick={() => cloneAgent(a)} className="text-xs underline mr-2">Clone</button>
+                                            <button onClick={() => startEdit(a)} className="text-xs text-accent hover:underline mr-2">Edit</button>
+                                            <button onClick={() => cloneAgent(a)} className="text-xs text-accent hover:underline mr-2">Clone</button>
                                             {a.is_system ? (
-                                                <span className="text-xs text-stourio-secondary" title="System agents cannot be deleted">Del</span>
+                                                <span className="text-xs text-txt-muted" title="System agents cannot be deleted">Del</span>
                                             ) : confirmDelete === a.name ? (
                                                 <span className="text-xs">
-                                                    <button onClick={() => deleteAgent(a.name)} className="text-stourio-red underline mr-1">Confirm</button>
-                                                    <button onClick={() => setConfirmDelete(null)} className="underline">Cancel</button>
+                                                    <button onClick={() => deleteAgent(a.name)} className="text-st-red hover:underline mr-1">Confirm</button>
+                                                    <button onClick={() => setConfirmDelete(null)} className="text-txt-secondary hover:underline">Cancel</button>
                                                 </span>
                                             ) : (
-                                                <button onClick={() => setConfirmDelete(a.name)} className="text-stourio-red text-xs underline">Del</button>
+                                                <button onClick={() => setConfirmDelete(a.name)} className="text-st-red text-xs hover:underline">Del</button>
                                             )}
                                         </td>
                                     </tr>
                                 ))}
-                                {agents.length === 0 && <tr><td colSpan="5" className="text-stourio-secondary text-center">No agents found.</td></tr>}
+                                {agents.length === 0 && <tr><td colSpan="5" className="text-txt-secondary text-center">No agents found.</td></tr>}
                             </tbody>
                         </table>
                     </div>
@@ -474,10 +532,10 @@
 
             return (
                 <div>
-                    <h3 className="text-xl mb-4">Security Feed</h3>
+                    <h3 className="text-sm font-semibold text-txt-muted uppercase tracking-wider mono mb-4">Security Feed</h3>
                     <div className="flex gap-4 mb-6 items-center">
                         <div>
-                            <label className="text-xs text-stourio-secondary mr-2">Severity:</label>
+                            <label className="text-xs text-txt-muted mr-2 mono">Severity:</label>
                             <select className="input-field text-sm mb-0 w-auto inline-block" value={filterSeverity} onChange={e => setFilterSeverity(e.target.value)}>
                                 <option value="all">All</option>
                                 <option value="low">Low</option>
@@ -487,7 +545,7 @@
                             </select>
                         </div>
                         <div>
-                            <label className="text-xs text-stourio-secondary mr-2">Status:</label>
+                            <label className="text-xs text-txt-muted mr-2 mono">Status:</label>
                             <select className="input-field text-sm mb-0 w-auto inline-block" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
                                 <option value="all">All</option>
                                 <option value="open">Open</option>
@@ -496,7 +554,7 @@
                                 <option value="false_positive">False Positive</option>
                             </select>
                         </div>
-                        <span className="text-xs text-stourio-secondary">{filtered.length} alert{filtered.length !== 1 ? 's' : ''}</span>
+                        <span className="text-xs text-txt-muted mono">{filtered.length} alert{filtered.length !== 1 ? 's' : ''}</span>
                     </div>
 
                     <div className="space-y-3">
@@ -505,12 +563,12 @@
                                 <div className="flex justify-between items-start">
                                     <div className="flex items-center gap-3">
                                         <span className={severityBadge(alert.severity)}>{alert.severity}</span>
-                                        <span className="font-medium text-sm">{alert.title || alert.alert_type || 'Alert'}</span>
-                                        <span className="text-xs text-stourio-secondary">{alert.status || 'open'}</span>
+                                        <span className="font-medium text-sm text-txt-primary">{alert.title || alert.alert_type || 'Alert'}</span>
+                                        <span className="text-xs text-txt-muted">{alert.status || 'open'}</span>
                                     </div>
-                                    <span className="text-xs text-stourio-secondary whitespace-nowrap">{alert.created_at ? new Date(alert.created_at).toLocaleString() : '--'}</span>
+                                    <span className="text-xs text-txt-muted whitespace-nowrap">{alert.created_at ? new Date(alert.created_at).toLocaleString() : '--'}</span>
                                 </div>
-                                {alert.description && <p className="text-sm text-stourio-secondary mt-2">{alert.description}</p>}
+                                {alert.description && <p className="text-sm text-txt-secondary mt-2">{alert.description}</p>}
                                 <div className="flex gap-2 mt-3 items-center">
                                     <button onClick={() => updateAlert(alert.id, 'acknowledged')} className="btn btn-outline btn-sm">Acknowledge</button>
                                     <button onClick={() => updateAlert(alert.id, 'resolved')} className="btn btn-outline btn-sm">Resolve</button>
@@ -520,13 +578,13 @@
                                     </button>
                                 </div>
                                 {expanded === alert.id && (
-                                    <pre className="mt-3 bg-stourio-bg p-3 rounded text-xs font-mono overflow-x-auto max-h-60 overflow-y-auto">
+                                    <pre className="mt-3 bg-bg-700 p-3 rounded text-xs mono overflow-x-auto max-h-60 overflow-y-auto text-txt-secondary border border-border">
                                         {JSON.stringify(alert.evidence || alert, null, 2)}
                                     </pre>
                                 )}
                             </div>
                         ))}
-                        {filtered.length === 0 && <p className="text-sm text-stourio-secondary card">No alerts match filters.</p>}
+                        {filtered.length === 0 && <p className="text-sm text-txt-secondary card">No alerts match filters.</p>}
                     </div>
                 </div>
             );
@@ -553,9 +611,9 @@
             return (
                 <div>
                     <div className="flex justify-between items-center mb-6">
-                        <h3 className="text-xl">Telegram Messages</h3>
+                        <h3 className="text-sm font-semibold text-txt-muted uppercase tracking-wider mono">Telegram Messages</h3>
                         <div className="flex items-center gap-2">
-                            <span className="text-xs text-stourio-secondary">{messages.length} messages</span>
+                            <span className="text-xs text-txt-muted mono">{messages.length} messages</span>
                             <button onClick={fetchMessages} className="btn btn-outline btn-sm" disabled={loading}>
                                 {loading ? 'Loading...' : 'Refresh'}
                             </button>
@@ -568,18 +626,18 @@
                             <tbody>
                                 {messages.map((msg, i) => (
                                     <tr key={msg.id || i}>
-                                        <td className="whitespace-nowrap text-stourio-secondary">{msg.timestamp ? new Date(msg.timestamp).toLocaleString() : '--'}</td>
-                                        <td className="text-xs">{msg.user_id || msg.from || msg.source || '--'}</td>
-                                        <td className="text-xs font-mono">{msg.agent_id || msg.agent_template || '--'}</td>
-                                        <td className="max-w-md truncate">{msg.detail || msg.message || msg.content || '--'}</td>
+                                        <td className="whitespace-nowrap text-txt-muted">{msg.timestamp ? new Date(msg.timestamp).toLocaleString() : '--'}</td>
+                                        <td className="text-xs text-txt-secondary">{msg.user_id || msg.from || msg.source || '--'}</td>
+                                        <td className="text-xs mono text-txt-secondary">{msg.agent_id || msg.agent_template || '--'}</td>
+                                        <td className="max-w-md truncate text-txt-primary">{msg.detail || msg.message || msg.content || '--'}</td>
                                         <td><span className={`badge ${msg.direction === 'outbound' ? 'badge-low' : 'badge-medium'}`}>{msg.direction || msg.action || '--'}</span></td>
                                     </tr>
                                 ))}
-                                {messages.length === 0 && !loading && <tr><td colSpan="5" className="text-stourio-secondary text-center">No telegram messages found.</td></tr>}
+                                {messages.length === 0 && !loading && <tr><td colSpan="5" className="text-txt-secondary text-center">No telegram messages found.</td></tr>}
                             </tbody>
                         </table>
                     </div>
-                    <p className="text-xs text-stourio-secondary mt-2">Read-only view. Messages sourced from audit trail.</p>
+                    <p className="text-xs text-txt-muted mt-2">Read-only view. Messages sourced from audit trail.</p>
                 </div>
             );
         }
@@ -607,27 +665,27 @@
             return (
                 <div className="grid grid-cols-3 gap-6">
                     <div className="col-span-2 card">
-                        <h3 className="text-xl mb-4">Active Rules</h3>
+                        <h3 className="text-sm font-semibold text-txt-muted uppercase tracking-wider mono mb-4">Active Rules</h3>
                         <table>
                             <thead><tr><th>Name</th><th>Pattern</th><th>Type</th><th>Action</th><th></th></tr></thead>
                             <tbody>
                                 {rules.map(r => (
                                     <tr key={r.id}>
-                                        <td className="font-medium text-sm">{r.name}</td>
-                                        <td className="font-mono text-xs">{r.pattern}</td>
-                                        <td className="text-xs">{r.pattern_type}</td>
-                                        <td className="text-xs font-bold">{r.action}</td>
-                                        <td><button onClick={() => deleteRule(r.id)} className="text-stourio-red text-xs underline">Del</button></td>
+                                        <td className="font-medium text-sm text-txt-primary">{r.name}</td>
+                                        <td className="mono text-xs text-txt-secondary">{r.pattern}</td>
+                                        <td className="text-xs text-txt-secondary">{r.pattern_type}</td>
+                                        <td className="text-xs font-bold text-txt-primary">{r.action}</td>
+                                        <td><button onClick={() => deleteRule(r.id)} className="text-st-red text-xs hover:underline">Del</button></td>
                                     </tr>
                                 ))}
                             </tbody>
                         </table>
                     </div>
                     <div className="card h-fit">
-                        <h3 className="text-xl mb-4">Add Rule</h3>
+                        <h3 className="text-sm font-semibold text-txt-muted uppercase tracking-wider mono mb-4">Add Rule</h3>
                         <form onSubmit={createRule}>
                             <input className="input-field text-sm" placeholder="Rule Name (e.g., block_drop)" value={form.name} onChange={e => setForm({...form, name: e.target.value})} required />
-                            <input className="input-field text-sm font-mono" placeholder="Pattern" value={form.pattern} onChange={e => setForm({...form, pattern: e.target.value})} required />
+                            <input className="input-field text-sm mono" placeholder="Pattern" value={form.pattern} onChange={e => setForm({...form, pattern: e.target.value})} required />
                             <select className="input-field text-sm" value={form.pattern_type} onChange={e => setForm({...form, pattern_type: e.target.value})}>
                                 <option value="regex">Regex</option><option value="keyword">Keyword</option><option value="event_type">Event Type</option>
                             </select>
@@ -651,17 +709,17 @@
 
             return (
                 <div className="card">
-                    <h3 className="text-xl mb-4">Audit Ledger</h3>
+                    <h3 className="text-sm font-semibold text-txt-muted uppercase tracking-wider mono mb-4">Audit Ledger</h3>
                     <div className="overflow-x-auto">
                         <table className="text-sm">
                             <thead><tr><th>Timestamp</th><th>Action</th><th>Details</th><th>Risk</th></tr></thead>
                             <tbody>
                                 {logs.map(log => (
                                     <tr key={log.id}>
-                                        <td className="whitespace-nowrap text-stourio-secondary">{new Date(log.timestamp).toLocaleString()}</td>
-                                        <td className="font-medium">{log.action}</td>
-                                        <td className="font-mono text-xs">{log.detail}</td>
-                                        <td>{log.risk_level && <span className="bg-stourio-bg px-2 py-1 rounded text-xs">{log.risk_level}</span>}</td>
+                                        <td className="whitespace-nowrap text-txt-muted">{new Date(log.timestamp).toLocaleString()}</td>
+                                        <td className="font-medium text-txt-primary">{log.action}</td>
+                                        <td className="mono text-xs text-txt-secondary">{log.detail}</td>
+                                        <td>{log.risk_level && <span className="bg-bg-700 px-2 py-1 rounded text-xs text-txt-secondary border border-border">{log.risk_level}</span>}</td>
                                     </tr>
                                 ))}
                             </tbody>
@@ -733,18 +791,25 @@
                         datasets: [{
                             label: 'Cost (USD)',
                             data: byProvider.map(p => p.total_cost_usd || p.cost_usd || p.cost || 0),
-                            backgroundColor: '#2e2e2e',
-                            borderColor: '#1a1a1a',
+                            backgroundColor: '#38bdf8',
+                            borderColor: '#0ea5e9',
                             borderWidth: 1
                         }]
                     },
                     options: {
                         responsive: true,
-                        plugins: { legend: { display: false } },
+                        plugins: {
+                            legend: { display: false }
+                        },
                         scales: {
                             y: {
                                 beginAtZero: true,
-                                ticks: { callback: v => '$' + v.toFixed(4) }
+                                ticks: { callback: v => '$' + v.toFixed(4), color: '#5a6882' },
+                                grid: { color: '#252840' }
+                            },
+                            x: {
+                                ticks: { color: '#5a6882' },
+                                grid: { color: '#252840' }
                             }
                         }
                     }
@@ -757,58 +822,58 @@
             return (
                 <div>
                     <div className="flex items-center gap-2 mb-6">
-                        <span className="text-sm text-stourio-secondary font-medium">Range:</span>
+                        <span className="text-sm text-txt-muted font-medium mono">Range:</span>
                         {['24h', '7d', '30d'].map(r => (
                             <button key={r} onClick={() => setRange(r)} className={`btn text-sm ${range === r ? 'btn-primary' : 'btn-outline'}`}>{r}</button>
                         ))}
-                        {loading && <span className="text-xs text-stourio-secondary italic ml-2">Loading...</span>}
+                        {loading && <span className="text-xs text-txt-muted italic ml-2 mono">Loading...</span>}
                     </div>
 
                     <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
                         <div className="card text-center">
-                            <p className="text-xs text-stourio-secondary mb-1">Total Cost</p>
-                            <p className="text-2xl font-serif font-semibold">{summary ? fmtCost(summary.totalCost) : '--'}</p>
+                            <p className="text-xs text-txt-muted mb-1 mono">Total Cost</p>
+                            <p className="text-2xl font-bold text-txt-primary">{summary ? fmtCost(summary.totalCost) : '--'}</p>
                         </div>
                         <div className="card text-center">
-                            <p className="text-xs text-stourio-secondary mb-1">Total Tokens</p>
-                            <p className="text-2xl font-serif font-semibold">{summary ? fmtNum(summary.totalTokens) : '--'}</p>
+                            <p className="text-xs text-txt-muted mb-1 mono">Total Tokens</p>
+                            <p className="text-2xl font-bold text-txt-primary">{summary ? fmtNum(summary.totalTokens) : '--'}</p>
                         </div>
                         <div className="card text-center">
-                            <p className="text-xs text-stourio-secondary mb-1">Total Calls</p>
-                            <p className="text-2xl font-serif font-semibold">{summary ? fmtNum(summary.totalCalls) : '--'}</p>
+                            <p className="text-xs text-txt-muted mb-1 mono">Total Calls</p>
+                            <p className="text-2xl font-bold text-txt-primary">{summary ? fmtNum(summary.totalCalls) : '--'}</p>
                         </div>
                         <div className="card text-center">
-                            <p className="text-xs text-stourio-secondary mb-1">Cache Hit Rate</p>
-                            <p className="text-2xl font-serif font-semibold text-stourio-green">{summary ? summary.cacheRate + '%' : '--'}</p>
+                            <p className="text-xs text-txt-muted mb-1 mono">Cache Hit Rate</p>
+                            <p className="text-2xl font-bold text-st-green">{summary ? summary.cacheRate + '%' : '--'}</p>
                         </div>
                         <div className="card text-center">
-                            <p className="text-xs text-stourio-secondary mb-1">Est. Savings</p>
-                            <p className="text-2xl font-serif font-semibold text-stourio-green">{summary ? fmtCost(summary.estimatedSavings) : '--'}</p>
+                            <p className="text-xs text-txt-muted mb-1 mono">Est. Savings</p>
+                            <p className="text-2xl font-bold text-st-green">{summary ? fmtCost(summary.estimatedSavings) : '--'}</p>
                         </div>
                     </div>
 
                     <div className="grid grid-cols-2 gap-6 mb-6">
                         <div className="card">
-                            <h3 className="text-xl mb-4">Cost by Provider</h3>
+                            <h3 className="text-sm font-semibold text-txt-muted uppercase tracking-wider mono mb-4">Cost by Provider</h3>
                             {byProvider.length === 0 && !loading
-                                ? <p className="text-sm text-stourio-secondary">No data.</p>
+                                ? <p className="text-sm text-txt-secondary">No data.</p>
                                 : <canvas ref={chartRef} height="200"></canvas>
                             }
                         </div>
                         <div className="card overflow-x-auto">
-                            <h3 className="text-xl mb-4">Cost by Agent</h3>
+                            <h3 className="text-sm font-semibold text-txt-muted uppercase tracking-wider mono mb-4">Cost by Agent</h3>
                             {byAgent.length === 0 && !loading
-                                ? <p className="text-sm text-stourio-secondary">No data.</p>
+                                ? <p className="text-sm text-txt-secondary">No data.</p>
                                 : (
                                     <table className="text-sm">
                                         <thead><tr><th>Agent</th><th>Calls</th><th>Tokens</th><th>Cost</th></tr></thead>
                                         <tbody>
                                             {byAgent.map((a, i) => (
                                                 <tr key={i}>
-                                                    <td className="font-medium">{a.agent_template || a.group || a.key || 'Unknown'}</td>
-                                                    <td>{fmtNum(a.total_calls || a.calls || 0)}</td>
-                                                    <td>{fmtNum(a.total_tokens || a.tokens || 0)}</td>
-                                                    <td>{fmtCost(a.total_cost_usd || a.cost_usd || a.cost || 0)}</td>
+                                                    <td className="font-medium text-txt-primary">{a.agent_template || a.group || a.key || 'Unknown'}</td>
+                                                    <td className="text-txt-secondary">{fmtNum(a.total_calls || a.calls || 0)}</td>
+                                                    <td className="text-txt-secondary">{fmtNum(a.total_tokens || a.tokens || 0)}</td>
+                                                    <td className="text-txt-secondary">{fmtCost(a.total_cost_usd || a.cost_usd || a.cost || 0)}</td>
                                                 </tr>
                                             ))}
                                         </tbody>
@@ -819,20 +884,20 @@
                     </div>
 
                     <div className="card overflow-x-auto">
-                        <h3 className="text-xl mb-4">Recent Calls</h3>
+                        <h3 className="text-sm font-semibold text-txt-muted uppercase tracking-wider mono mb-4">Recent Calls</h3>
                         {recentCalls.length === 0 && !loading
-                            ? <p className="text-sm text-stourio-secondary">No data.</p>
+                            ? <p className="text-sm text-txt-secondary">No data.</p>
                             : (
                                 <table className="text-sm">
                                     <thead><tr><th>Time</th><th>Agent</th><th>Model</th><th>Tokens</th><th>Cost</th></tr></thead>
                                     <tbody>
                                         {recentCalls.map((c, i) => (
                                             <tr key={i}>
-                                                <td className="whitespace-nowrap text-stourio-secondary">{c.created_at ? new Date(c.created_at).toLocaleString() : '--'}</td>
-                                                <td>{c.agent_template || c.agent || '--'}</td>
-                                                <td className="font-mono text-xs">{c.model || '--'}</td>
-                                                <td>{fmtNum(c.total_tokens || c.tokens || 0)}</td>
-                                                <td>{fmtCost(c.cost_usd || c.cost || 0)}</td>
+                                                <td className="whitespace-nowrap text-txt-muted">{c.created_at ? new Date(c.created_at).toLocaleString() : '--'}</td>
+                                                <td className="text-txt-primary">{c.agent_template || c.agent || '--'}</td>
+                                                <td className="mono text-xs text-txt-secondary">{c.model || '--'}</td>
+                                                <td className="text-txt-secondary">{fmtNum(c.total_tokens || c.tokens || 0)}</td>
+                                                <td className="text-txt-secondary">{fmtCost(c.cost_usd || c.cost || 0)}</td>
                                             </tr>
                                         ))}
                                     </tbody>
@@ -876,36 +941,36 @@
             return (
                 <div className="grid grid-cols-3 gap-6">
                     <div className="col-span-2 card">
-                        <h3 className="text-xl mb-4">Scheduled Jobs</h3>
+                        <h3 className="text-sm font-semibold text-txt-muted uppercase tracking-wider mono mb-4">Scheduled Jobs</h3>
                         <table className="text-sm">
                             <thead><tr><th>Name</th><th>Schedule</th><th>Agent</th><th>Objective</th><th>Active</th><th>Last Run</th><th>Next Run</th><th></th></tr></thead>
                             <tbody>
                                 {jobs.map(j => (
                                     <tr key={j.id}>
-                                        <td className="font-medium">{j.name}</td>
-                                        <td className="font-mono text-xs">{j.schedule}</td>
-                                        <td className="text-xs">{j.agent_type}</td>
-                                        <td className="text-xs max-w-[200px] truncate" title={j.objective}>{j.objective}</td>
+                                        <td className="font-medium text-txt-primary">{j.name}</td>
+                                        <td className="mono text-xs text-txt-secondary">{j.schedule}</td>
+                                        <td className="text-xs text-txt-secondary">{j.agent_type}</td>
+                                        <td className="text-xs max-w-[200px] truncate text-txt-secondary" title={j.objective}>{j.objective}</td>
                                         <td>
                                             <label className="toggle">
                                                 <input type="checkbox" checked={j.active} onChange={() => toggleJob(j.name, !j.active)} />
                                                 <span className="toggle-slider"></span>
                                             </label>
                                         </td>
-                                        <td className="text-xs text-stourio-secondary">{j.last_run_at ? new Date(j.last_run_at).toLocaleString() : '—'}</td>
-                                        <td className="text-xs text-stourio-secondary">{j.next_run_at ? new Date(j.next_run_at).toLocaleString() : '—'}</td>
-                                        <td><button onClick={() => deleteJob(j.name)} className="text-stourio-red text-xs underline">Del</button></td>
+                                        <td className="text-xs text-txt-muted">{j.last_run_at ? new Date(j.last_run_at).toLocaleString() : '\u2014'}</td>
+                                        <td className="text-xs text-txt-muted">{j.next_run_at ? new Date(j.next_run_at).toLocaleString() : '\u2014'}</td>
+                                        <td><button onClick={() => deleteJob(j.name)} className="text-st-red text-xs hover:underline">Del</button></td>
                                     </tr>
                                 ))}
-                                {jobs.length === 0 && <tr><td colSpan="8" className="text-stourio-secondary text-center">No cron jobs configured.</td></tr>}
+                                {jobs.length === 0 && <tr><td colSpan="8" className="text-txt-secondary text-center">No cron jobs configured.</td></tr>}
                             </tbody>
                         </table>
                     </div>
                     <div className="card h-fit">
-                        <h3 className="text-xl mb-4">Add Cron Job</h3>
+                        <h3 className="text-sm font-semibold text-txt-muted uppercase tracking-wider mono mb-4">Add Cron Job</h3>
                         <form onSubmit={createJob}>
                             <input className="input-field text-sm" placeholder="Job name (e.g., daily-report)" value={form.name} onChange={e => setForm({...form, name: e.target.value})} required />
-                            <input className="input-field text-sm font-mono" placeholder="Cron schedule (e.g., 0 9 * * *)" value={form.schedule} onChange={e => setForm({...form, schedule: e.target.value})} required />
+                            <input className="input-field text-sm mono" placeholder="Cron schedule (e.g., 0 9 * * *)" value={form.schedule} onChange={e => setForm({...form, schedule: e.target.value})} required />
                             <select className="input-field text-sm" value={form.agent_type} onChange={e => setForm({...form, agent_type: e.target.value})} required>
                                 <option value="">Select Agent</option>
                                 {agents.map(a => <option key={a.name} value={a.name}>{a.display_name || a.name}</option>)}
@@ -913,9 +978,9 @@
                             <textarea className="input-field text-sm" placeholder="Objective — what should the agent do?" value={form.objective} onChange={e => setForm({...form, objective: e.target.value})} required />
                             <button type="submit" className="btn btn-primary w-full mt-2">Create Cron Job</button>
                         </form>
-                        <p className="text-xs text-stourio-secondary mt-3">
+                        <p className="text-xs text-txt-muted mt-3 mono">
                             Schedule format: min hour day month weekday<br/>
-                            Examples: <code>*/5 * * * *</code> (every 5 min), <code>0 9 * * *</code> (daily 9am)
+                            Examples: <code className="text-accent">*/5 * * * *</code> (every 5 min), <code className="text-accent">0 9 * * *</code> (daily 9am)
                         </p>
                     </div>
                 </div>
@@ -959,34 +1024,34 @@
             return (
                 <div className="grid grid-cols-3 gap-6">
                     <div className="col-span-2 card">
-                        <h3 className="text-xl mb-4">Connected MCP Servers</h3>
+                        <h3 className="text-sm font-semibold text-txt-muted uppercase tracking-wider mono mb-4">Connected MCP Servers</h3>
                         <table className="text-sm">
                             <thead><tr><th>Name</th><th>Transport</th><th>Endpoint</th><th>Auth</th><th>Connected</th><th>Tools</th><th></th></tr></thead>
                             <tbody>
                                 {servers.map(s => (
                                     <tr key={s.id}>
-                                        <td className="font-medium">{s.name}</td>
-                                        <td className="text-xs uppercase">{s.transport}</td>
-                                        <td className="font-mono text-xs max-w-[200px] truncate" title={s.endpoint_url || s.endpoint_command}>{s.endpoint_url || s.endpoint_command}</td>
-                                        <td className="text-xs font-mono">{s.auth_env_var || '—'}</td>
+                                        <td className="font-medium text-txt-primary">{s.name}</td>
+                                        <td className="text-xs uppercase text-txt-secondary">{s.transport}</td>
+                                        <td className="mono text-xs max-w-[200px] truncate text-txt-secondary" title={s.endpoint_url || s.endpoint_command}>{s.endpoint_url || s.endpoint_command}</td>
+                                        <td className="text-xs mono text-txt-muted">{s.auth_env_var || '\u2014'}</td>
                                         <td>
                                             <span className={`badge ${s.connected ? 'badge-low' : 'badge-high'}`}>
                                                 {s.connected ? 'yes' : 'no'}
                                             </span>
                                         </td>
-                                        <td className="text-xs">{s.tools?.length || 0} tools</td>
+                                        <td className="text-xs text-txt-secondary">{s.tools?.length || 0} tools</td>
                                         <td className="flex gap-2">
-                                            <button onClick={() => refreshServer(s.name)} className="text-stourio-secondary text-xs underline">Refresh</button>
-                                            <button onClick={() => deleteServer(s.name)} className="text-stourio-red text-xs underline">Del</button>
+                                            <button onClick={() => refreshServer(s.name)} className="text-accent text-xs hover:underline">Refresh</button>
+                                            <button onClick={() => deleteServer(s.name)} className="text-st-red text-xs hover:underline">Del</button>
                                         </td>
                                     </tr>
                                 ))}
-                                {servers.length === 0 && <tr><td colSpan="7" className="text-stourio-secondary text-center">No MCP servers connected.</td></tr>}
+                                {servers.length === 0 && <tr><td colSpan="7" className="text-txt-secondary text-center">No MCP servers connected.</td></tr>}
                             </tbody>
                         </table>
                     </div>
                     <div className="card h-fit">
-                        <h3 className="text-xl mb-4">Connect MCP Server</h3>
+                        <h3 className="text-sm font-semibold text-txt-muted uppercase tracking-wider mono mb-4">Connect MCP Server</h3>
                         <form onSubmit={createServer}>
                             <input className="input-field text-sm" placeholder="Server name (e.g., notion)" value={form.name} onChange={e => setForm({...form, name: e.target.value})} required />
                             <select className="input-field text-sm" value={form.transport} onChange={e => setForm({...form, transport: e.target.value})}>
@@ -994,15 +1059,15 @@
                                 <option value="stdio">Stdio (subprocess)</option>
                             </select>
                             {form.transport === 'sse' ? (
-                                <input className="input-field text-sm font-mono" placeholder="Endpoint URL (e.g., http://localhost:3456/sse)" value={form.endpoint_url} onChange={e => setForm({...form, endpoint_url: e.target.value})} required />
+                                <input className="input-field text-sm mono" placeholder="Endpoint URL (e.g., http://localhost:3456/sse)" value={form.endpoint_url} onChange={e => setForm({...form, endpoint_url: e.target.value})} required />
                             ) : (
-                                <input className="input-field text-sm font-mono" placeholder="Command (e.g., npx @notion/mcp-server)" value={form.endpoint_command} onChange={e => setForm({...form, endpoint_command: e.target.value})} required />
+                                <input className="input-field text-sm mono" placeholder="Command (e.g., npx @notion/mcp-server)" value={form.endpoint_command} onChange={e => setForm({...form, endpoint_command: e.target.value})} required />
                             )}
-                            <input className="input-field text-sm font-mono" placeholder="Auth env var name (e.g., NOTION_MCP_TOKEN)" value={form.auth_env_var} onChange={e => setForm({...form, auth_env_var: e.target.value})} />
+                            <input className="input-field text-sm mono" placeholder="Auth env var name (e.g., NOTION_MCP_TOKEN)" value={form.auth_env_var} onChange={e => setForm({...form, auth_env_var: e.target.value})} />
                             <button type="submit" className="btn btn-primary w-full mt-2">Connect Server</button>
                         </form>
-                        <p className="text-xs text-stourio-secondary mt-3">
-                            Set the auth token in your <code>.env</code> file before connecting.<br/>
+                        <p className="text-xs text-txt-muted mt-3">
+                            Set the auth token in your <code className="text-accent">.env</code> file before connecting.<br/>
                             After connecting, assign the server to agents via the Agents tab.
                         </p>
                     </div>
@@ -1034,7 +1099,7 @@
             return (
                 <div>
                     <div className="flex justify-between items-center mb-6">
-                        <h3 className="text-xl">Agent Deployment</h3>
+                        <h3 className="text-sm font-semibold text-txt-muted uppercase tracking-wider mono">Agent Deployment</h3>
                         <button onClick={fetchPool} className="btn btn-outline btn-sm" disabled={loading}>
                             {loading ? 'Loading...' : 'Refresh'}
                         </button>
@@ -1043,20 +1108,20 @@
                     {/* Summary cards */}
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                         <div className="card text-center">
-                            <p className="text-xs text-stourio-secondary mb-1">Agent Types</p>
-                            <p className="text-2xl font-serif font-semibold">{agents.length}</p>
+                            <p className="text-xs text-txt-muted mb-1 mono">Agent Types</p>
+                            <p className="text-2xl font-bold text-txt-primary">{agents.length}</p>
                         </div>
                         <div className="card text-center">
-                            <p className="text-xs text-stourio-secondary mb-1">Total Active</p>
-                            <p className="text-2xl font-serif font-semibold">{agents.reduce((s, [, v]) => s + (v.active || 0), 0)}</p>
+                            <p className="text-xs text-txt-muted mb-1 mono">Total Active</p>
+                            <p className="text-2xl font-bold text-txt-primary">{agents.reduce((s, [, v]) => s + (v.active || 0), 0)}</p>
                         </div>
                         <div className="card text-center">
-                            <p className="text-xs text-stourio-secondary mb-1">Total Queued</p>
-                            <p className="text-2xl font-serif font-semibold">{agents.reduce((s, [, v]) => s + (v.queued || v.queue_depth || 0), 0)}</p>
+                            <p className="text-xs text-txt-muted mb-1 mono">Total Queued</p>
+                            <p className="text-2xl font-bold text-txt-primary">{agents.reduce((s, [, v]) => s + (v.queued || v.queue_depth || 0), 0)}</p>
                         </div>
                         <div className="card text-center">
-                            <p className="text-xs text-stourio-secondary mb-1">System Status</p>
-                            <p className={`text-2xl font-serif font-semibold ${status?.kill_switch ? 'text-stourio-red' : 'text-stourio-green'}`}>
+                            <p className="text-xs text-txt-muted mb-1 mono">System Status</p>
+                            <p className={`text-2xl font-bold ${status?.kill_switch ? 'text-st-red' : 'text-st-green'}`}>
                                 {status?.kill_switch ? 'HALTED' : 'RUNNING'}
                             </p>
                         </div>
@@ -1069,15 +1134,15 @@
                             <tbody>
                                 {agents.map(([name, data]) => (
                                     <tr key={name}>
-                                        <td className="font-medium">{name}</td>
-                                        <td className="text-center">{data.active || 0}</td>
-                                        <td className="text-center">{data.max_concurrent || data.concurrency || '--'}</td>
+                                        <td className="font-medium text-txt-primary">{name}</td>
+                                        <td className="text-center text-txt-secondary">{data.active || 0}</td>
+                                        <td className="text-center text-txt-secondary">{data.max_concurrent || data.concurrency || '--'}</td>
                                         <td className="text-center">
-                                            <span className={(data.queued || data.queue_depth || 0) > 0 ? 'text-stourio-orange font-bold' : ''}>
+                                            <span className={(data.queued || data.queue_depth || 0) > 0 ? 'text-st-orange font-bold' : 'text-txt-secondary'}>
                                                 {data.queued || data.queue_depth || 0}
                                             </span>
                                         </td>
-                                        <td className="text-center">{data.total_processed || data.completed || '--'}</td>
+                                        <td className="text-center text-txt-secondary">{data.total_processed || data.completed || '--'}</td>
                                         <td>
                                             <span className={`badge ${(data.active || 0) > 0 ? 'badge-low' : 'badge-medium'}`}>
                                                 {(data.active || 0) > 0 ? 'running' : 'idle'}
@@ -1085,7 +1150,7 @@
                                         </td>
                                     </tr>
                                 ))}
-                                {agents.length === 0 && <tr><td colSpan="6" className="text-stourio-secondary text-center">No pool data available.</td></tr>}
+                                {agents.length === 0 && <tr><td colSpan="6" className="text-txt-secondary text-center">No pool data available.</td></tr>}
                             </tbody>
                         </table>
                     </div>
