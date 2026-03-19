@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:3000,http://localhost:8000"
     security_audit_interval_seconds: int = 60
     security_inline_enabled: bool = True
+    scheduler_tick_seconds: int = 30
 
     # --- Infrastructure passwords (docker-compose) ---
     postgres_password: str = "changeme"
