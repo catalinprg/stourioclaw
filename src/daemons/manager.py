@@ -95,14 +95,18 @@ class DaemonManager:
         self._last_heartbeat[agent_name] = datetime.now(timezone.utc)
 
     async def _run_with_health_check(self, name: str, config: dict, stop_event: asyncio.Event) -> None:
+        backoff = 10
+        max_backoff = 300
         while not stop_event.is_set():
             try:
                 self._last_heartbeat[name] = datetime.now(timezone.utc)
                 await run_daemon_loop(name, config, stop_event, on_cycle_complete=self._on_cycle_complete)
+                backoff = 10  # Reset on clean exit
             except Exception as e:
-                logger.error("Daemon '%s' crashed: %s. Restarting in 10s...", name, e)
-                await audit.log("DAEMON_CRASHED", f"Daemon '{name}' crashed: {e}. Auto-restarting.")
-                await asyncio.sleep(10)
+                logger.error("Daemon '%s' crashed: %s. Restarting in %ds...", name, e, backoff)
+                await audit.log("DAEMON_CRASHED", f"Daemon '{name}' crashed: {e}. Restarting in {backoff}s.")
+                await asyncio.sleep(backoff)
+                backoff = min(backoff * 2, max_backoff)
 
     async def _listen_control_events(self) -> None:
         pubsub = await get_pubsub_connection()

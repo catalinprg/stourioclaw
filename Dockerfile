@@ -12,6 +12,9 @@ RUN pip install playwright && playwright install chromium && playwright install-
 # Copy source
 COPY . .
 
+RUN useradd -m -s /bin/bash stourio && chown -R stourio:stourio /app
+USER stourio
+
 EXPOSE 8000
 
-CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]

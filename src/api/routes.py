@@ -209,6 +209,7 @@ async def status():
 
 @router.get("/audit")
 async def audit_log(limit: int = 50):
+    limit = min(limit, 500)
     return await audit.get_recent(limit=limit)
 
 

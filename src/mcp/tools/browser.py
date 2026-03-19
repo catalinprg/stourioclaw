@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import ipaddress
 import logging
+import time
 from urllib.parse import urlparse
 
 from src.config import settings
@@ -16,6 +17,9 @@ logger = logging.getLogger("stourio.tools.browser")
 
 # Page cache keyed by session_id — allows multi-step browser workflows
 _page_cache: dict[str, object] = {}
+_page_timestamps: dict[str, float] = {}
+MAX_SESSION_AGE = 600  # 10 minutes
+MAX_SESSIONS = 20
 
 
 def _is_url_safe_network(url: str) -> bool:
@@ -75,6 +79,7 @@ async def browser_action(arguments: dict) -> dict:
     if action == "close_session":
         if session_id and session_id in _page_cache:
             page = _page_cache.pop(session_id)
+            _page_timestamps.pop(session_id, None)
             try:
                 await page.close()
             except Exception:
@@ -100,6 +105,21 @@ async def browser_action(arguments: dict) -> dict:
 
         pool = await get_browser_pool()
 
+        # Evict stale sessions
+        now = time.time()
+        stale = [sid for sid, ts in _page_timestamps.items() if now - ts > MAX_SESSION_AGE]
+        for sid in stale:
+            if sid in _page_cache:
+                try:
+                    await _page_cache.pop(sid).close()
+                except Exception:
+                    pass
+                _page_timestamps.pop(sid, None)
+
+        # Enforce max sessions
+        if len(_page_cache) >= MAX_SESSIONS and session_id not in _page_cache:
+            return {"error": f"Maximum browser sessions ({MAX_SESSIONS}) reached. Close existing sessions first."}
+
         # Reuse existing page or create new one
         page = None
         if session_id and session_id in _page_cache:
@@ -109,6 +129,7 @@ async def browser_action(arguments: dict) -> dict:
             if not session_id:
                 session_id = new_id()
             _page_cache[session_id] = page
+            _page_timestamps[session_id] = time.time()
 
         result = await execute_action(page, action, arguments)
         result["session_id"] = session_id
@@ -122,4 +143,5 @@ async def browser_action(arguments: dict) -> dict:
                 await _page_cache.pop(session_id).close()
             except Exception:
                 pass
+            _page_timestamps.pop(session_id, None)
         return {"error": f"Browser action failed: {str(e)}"}

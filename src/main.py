@@ -64,7 +64,7 @@ def _auto_generate_api_key():
 
     logger.info("=" * 60)
     logger.info("AUTO-GENERATED STOURIO_API_KEY (saved to .env):")
-    logger.info("  %s", key)
+    logger.info("  %s...%s", key[:8], key[-4:])
     logger.info("Use this key for admin panel login and API auth.")
     logger.info("=" * 60)
 
@@ -364,9 +364,13 @@ app = FastAPI(
 )
 setup_tracing(app)
 
+origins = settings.cors_origins.split(",") if settings.cors_origins else []
+if "*" in origins:
+    logger.warning("CORS origin '*' with credentials=True is insecure. Replacing with empty origins.")
+    origins = []
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins.split(",") if settings.cors_origins else [],
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "DELETE"],
     allow_headers=["Content-Type", "X-STOURIO-KEY"],

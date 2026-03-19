@@ -11,6 +11,7 @@ import logging
 from src.config import settings
 from src.persistence import audit
 from src.persistence.database import async_session
+from src.mcp.tools.messaging import _check_peer_allowed
 
 logger = logging.getLogger("stourio.tools.delegate")
 
@@ -55,6 +56,11 @@ async def delegate_to_agent(arguments: dict) -> dict:
             "error": f"Maximum delegation depth ({MAX_DELEGATION_DEPTH}) reached. "
                      f"Cannot delegate further to avoid infinite recursion.",
         }
+
+    # Check delegation ACL (reuses peer allowlist)
+    from_agent = arguments.get("_agent_name", "unknown")
+    if not await _check_peer_allowed(from_agent, agent_type):
+        return {"error": f"Agent '{from_agent}' is not allowed to delegate to '{agent_type}'. Update allowed_peers on the target agent."}
 
     await audit.log(
         "AGENT_DELEGATED",

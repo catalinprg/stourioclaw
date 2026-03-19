@@ -55,7 +55,7 @@ async def enqueue_message(
         "conversation_id": conversation_id,
     })
 
-    entry_id = await r.xadd(stream, {"data": payload})
+    entry_id = await r.xadd(stream, {"data": payload}, maxlen=1000)
     logger.info("Inbox message enqueued: %s -> %s (id=%s)", from_agent, target_agent, entry_id)
 
     # Wake daemon if running

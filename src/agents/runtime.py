@@ -4,6 +4,16 @@ import logging
 import asyncio
 import re
 from datetime import datetime
+
+_SENSITIVE_REDACT = re.compile(
+    r'(api[_-]?key|secret|password|token|credential|authorization)["\s:=]+\S+',
+    re.IGNORECASE,
+)
+
+
+def _redact_sensitive(text: str) -> str:
+    """Redact sensitive patterns from text before logging."""
+    return _SENSITIVE_REDACT.sub(r'\1=***REDACTED***', text)
 from sqlalchemy.ext.asyncio import AsyncSession
 from src.config import settings
 from src.mcp.registry import get_registry
@@ -84,8 +94,10 @@ async def default_tool_executor(tool_name: str, arguments: dict, agent_name: str
         logger.warning(f"SECURITY: Tool name contains illegal characters: '{tool_name}'")
         return json.dumps({"error": f"Invalid tool name: {tool_name}"})
 
-    # Inject caller identity for tools that need it (messaging, etc.)
-    arguments = {**arguments, "_agent_name": agent_name}
+    # Inject caller identity — strip any existing internal keys to prevent spoofing
+    clean_args = {k: v for k, v in arguments.items() if not k.startswith("_")}
+    clean_args["_agent_name"] = agent_name
+    arguments = clean_args
 
     try:
         result = await registry.execute(tool_name, arguments, agent_name=agent_name)
@@ -235,7 +247,7 @@ async def execute_agent(
 
                 await audit.log(
                     "AGENT_TOOL_CALL",
-                    f"Step {step + 1}: {tc['name']}({tc['arguments']})",
+                    f"Step {step + 1}: {tc['name']}({_redact_sensitive(str(tc['arguments']))})",
                     execution_id=execution.id,
                 )
 
