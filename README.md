@@ -42,7 +42,7 @@ Telegram / Webhook API
    - `TELEGRAM_BOT_TOKEN` (required)
    - `TELEGRAM_ALLOWED_USER_IDS` (required — your user ID from step 2)
    - `TELEGRAM_WEBHOOK_SECRET` (required — any random string)
-   - `STOURIO_API_KEY` (required — any random string, used for admin panel + API auth)
+   - `STOURIO_API_KEY` (auto-generated on first startup if empty — check logs or `.env` for the key)
    - `TELEGRAM_WEBHOOK_URL` — set to your public URL, or use polling for local dev:
      ```
      TELEGRAM_USE_POLLING=true
@@ -72,7 +72,7 @@ TELEGRAM_BOT_TOKEN=your-bot-token
 TELEGRAM_ALLOWED_USER_IDS=your-telegram-user-id
 TELEGRAM_WEBHOOK_URL=https://your-domain.com/api/telegram/webhook
 TELEGRAM_WEBHOOK_SECRET=generate-a-random-string
-STOURIO_API_KEY=generate-a-random-string
+STOURIO_API_KEY=            # leave empty to auto-generate on first startup
 POSTGRES_PASSWORD=generate-a-strong-password
 REDIS_PASSWORD=generate-a-strong-password
 DATABASE_URL=postgresql+asyncpg://stourio:your-postgres-password@postgres:5432/stourio
@@ -179,7 +179,7 @@ Add to your Claude Code MCP config:
 | `TELEGRAM_WEBHOOK_SECRET` | Secret for webhook verification | Yes |
 | `TELEGRAM_USE_POLLING` | Use polling instead of webhook | No (`false`) |
 | `TELEGRAM_ALLOWED_USER_IDS` | Comma-separated authorized user IDs | Yes |
-| `STOURIO_API_KEY` | API key for all endpoints | Yes |
+| `STOURIO_API_KEY` | API key for all endpoints (auto-generated if empty) | No |
 | `POSTGRES_PASSWORD` | PostgreSQL password | Yes |
 | `REDIS_PASSWORD` | Redis password | Yes |
 | `DATABASE_URL` | PostgreSQL connection string | Yes |
