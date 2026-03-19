@@ -23,6 +23,45 @@ logging.basicConfig(
 logger = logging.getLogger("stourio")
 
 
+def _validate_env():
+    """Check required env vars on startup. Fail loud, not silent."""
+    missing = []
+    if not settings.openrouter_api_key:
+        missing.append("OPENROUTER_API_KEY")
+    if not settings.telegram_bot_token:
+        missing.append("TELEGRAM_BOT_TOKEN")
+    if not settings.telegram_allowed_user_ids:
+        missing.append("TELEGRAM_ALLOWED_USER_IDS")
+    if not settings.stourio_api_key:
+        missing.append("STOURIO_API_KEY")
+
+    warnings = []
+    if not settings.openai_api_key:
+        warnings.append("OPENAI_API_KEY (needed for embeddings + voice transcription)")
+    if not settings.search_api_key:
+        warnings.append("SEARCH_API_KEY (needed for web_search tool)")
+    if not settings.telegram_webhook_url and not settings.telegram_use_polling:
+        warnings.append("TELEGRAM_WEBHOOK_URL (required unless TELEGRAM_USE_POLLING=true)")
+
+    if missing:
+        msg = (
+            "\n\n"
+            "===== MISSING REQUIRED ENVIRONMENT VARIABLES =====\n"
+            + "\n".join(f"  - {var}" for var in missing)
+            + "\n\nCopy .env.example to .env and fill in your keys:\n"
+            "  cp .env.example .env\n"
+            "===================================================\n"
+        )
+        logger.critical(msg)
+        raise SystemExit(1)
+
+    for w in warnings:
+        logger.warning("Optional env var not set: %s", w)
+
+
+_validate_env()
+
+
 async def signal_consumer_worker():
     """Background worker to dequeue and process signals reliably."""
     logger.info("Signal consumer worker started.")
