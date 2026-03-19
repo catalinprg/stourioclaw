@@ -1,6 +1,7 @@
 from __future__ import annotations
 import json
 import logging
+from typing import Sequence
 from src.models.schemas import (
     OrchestratorInput, OrchestratorResponse, RoutingDecision,
     RiskLevel, RuleAction, SignalSource, ChatMessage, ToolDefinition, new_id,
@@ -8,11 +9,12 @@ from src.models.schemas import (
 from src.adapters.registry import get_orchestrator_adapter
 from src.rules.engine import get_rules, evaluate
 from src.guardrails.approvals import create_approval_request, check_kill_switch
-from src.agents.runtime import list_templates
+from src.agents.registry import AgentRegistry
 from src.orchestrator.concurrency import get_pool
-from src.automation.workflows import execute_workflow, list_workflows
+from src.automation.workflows import execute_workflow
 from src.orchestrator.chains import execute_chain, list_chains
 from src.persistence import audit
+from src.persistence.database import get_session
 from src.telemetry import tracer
 
 logger = logging.getLogger("stourio.orchestrator")
@@ -21,18 +23,15 @@ logger = logging.getLogger("stourio.orchestrator")
 SYSTEM_PROMPT = """You are Stourio, an AI operations orchestrator. Your job is to analyze incoming
 signals (user requests or system events) and decide the best course of action.
 
-You have three types of capabilities:
+You have two types of capabilities:
 1. AI AGENTS - for dynamic, novel, or complex situations requiring reasoning
-2. AUTOMATION - for known patterns with predefined workflows
-3. CHAINS - for complex workflows requiring multiple agents in sequence or parallel
+2. CHAINS - for complex workflows requiring multiple agents in sequence or parallel
 
-Available agent types: {agent_types}
-Available automation workflows: {workflow_ids}
+Available agents: {agent_descriptions}
 Available chains: {chain_ids}
 
 For each input, you MUST respond by calling exactly one of these tools:
 - route_to_agent: when the situation needs reasoning, diagnosis, or adaptive response
-- route_to_automation: when a known workflow matches the situation
 - route_to_chain: when the situation requires multiple agents working in sequence or parallel
 - respond_directly: when you can answer the user without taking action
 - request_more_info: when the input is ambiguous and you need clarification
@@ -43,89 +42,86 @@ flag it as high-risk so the guardrails layer can request human approval.
 Be concise. Prioritize resolution over explanation."""
 
 
-ROUTING_TOOLS = [
-    ToolDefinition(
-        name="route_to_agent",
-        description="Route to an AI agent for reasoning-heavy, dynamic, or novel tasks",
-        parameters={
-            "type": "object",
-            "properties": {
-                "agent_type": {
-                    "type": "string",
-                    "enum": ["diagnose_repair", "escalate", "take_action"],
-                    "description": "Which agent template to use",
+def build_routing_tools(agents: Sequence) -> list[ToolDefinition]:
+    """Build routing tools dynamically from a list of agent objects.
+
+    Each agent must have .name and .description attributes.
+    The route_to_agent tool's agent_type enum is built from agent names.
+    """
+    agent_names = [a.name for a in agents]
+    # Build description string so LLM understands routing options
+    agent_desc_parts = [f"{a.name}: {a.description}" for a in agents]
+    agent_type_description = (
+        "Which agent to route to. Options: " + "; ".join(agent_desc_parts)
+        if agent_desc_parts
+        else "Which agent to route to"
+    )
+
+    return [
+        ToolDefinition(
+            name="route_to_agent",
+            description="Route to an AI agent for reasoning-heavy, dynamic, or novel tasks",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "agent_type": {
+                        "type": "string",
+                        "enum": agent_names,
+                        "description": agent_type_description,
+                    },
+                    "objective": {
+                        "type": "string",
+                        "description": "Clear objective for the agent",
+                    },
+                    "risk_level": {
+                        "type": "string",
+                        "enum": ["low", "medium", "high", "critical"],
+                    },
+                    "reasoning": {
+                        "type": "string",
+                        "description": "Why this routing decision was made",
+                    },
                 },
-                "objective": {
-                    "type": "string",
-                    "description": "Clear objective for the agent",
-                },
-                "risk_level": {
-                    "type": "string",
-                    "enum": ["low", "medium", "high", "critical"],
-                },
-                "reasoning": {
-                    "type": "string",
-                    "description": "Why this routing decision was made",
-                },
+                "required": ["agent_type", "objective", "risk_level", "reasoning"],
             },
-            "required": ["agent_type", "objective", "risk_level", "reasoning"],
-        },
-    ),
-    ToolDefinition(
-        name="route_to_automation",
-        description="Route to a predefined automation workflow for known patterns",
-        parameters={
-            "type": "object",
-            "properties": {
-                "workflow_id": {
-                    "type": "string",
-                    "description": "Which automation workflow to trigger",
+        ),
+        ToolDefinition(
+            name="respond_directly",
+            description="Respond to the user directly without taking any action",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "response": {"type": "string"},
+                    "reasoning": {"type": "string"},
                 },
-                "reasoning": {
-                    "type": "string",
-                    "description": "Why this workflow matches",
+                "required": ["response"],
+            },
+        ),
+        ToolDefinition(
+            name="request_more_info",
+            description="Ask the user for clarification before proceeding",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "question": {"type": "string"},
+                    "reasoning": {"type": "string"},
                 },
+                "required": ["question"],
             },
-            "required": ["workflow_id", "reasoning"],
-        },
-    ),
-    ToolDefinition(
-        name="respond_directly",
-        description="Respond to the user directly without taking any action",
-        parameters={
-            "type": "object",
-            "properties": {
-                "response": {"type": "string"},
-                "reasoning": {"type": "string"},
+        ),
+        ToolDefinition(
+            name="route_to_chain",
+            description="Route to a multi-agent chain for complex workflows requiring multiple agents",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "chain_name": {"type": "string", "description": "Name of the chain to execute"},
+                    "context": {"type": "string", "description": "Additional context for the chain"},
+                },
+                "required": ["chain_name"],
             },
-            "required": ["response"],
-        },
-    ),
-    ToolDefinition(
-        name="request_more_info",
-        description="Ask the user for clarification before proceeding",
-        parameters={
-            "type": "object",
-            "properties": {
-                "question": {"type": "string"},
-                "reasoning": {"type": "string"},
-            },
-            "required": ["question"],
-        },
-    ),
-    ToolDefinition(
-        name="route_to_chain",
-        description="Route to a multi-agent chain for complex workflows requiring multiple agents",
-        parameters={
-            "type": "object",
-            "properties": {
-                "chain_name": {"type": "string", "description": "Name of the chain to execute"},
-                "context": {"type": "string", "description": "Additional context for the chain"},
-            },
-            "required": ["chain_name"],
-        },
-    ),
-]
+        ),
+    ]
 
 
 async def process(signal: OrchestratorInput) -> dict:
@@ -248,18 +244,22 @@ async def _process_inner(signal: OrchestratorInput, span) -> dict:
     # --- Step 2: LLM routing ---
     adapter = get_orchestrator_adapter()
 
-    agent_types = ", ".join(t.id for t in list_templates())
-    workflow_ids = ", ".join(w.id for w in list_workflows())
+    async with get_session() as session:
+        registry = AgentRegistry(session)
+        routable_agents = await registry.list_routable()
+
+    routing_tools = build_routing_tools(routable_agents)
+    agent_descriptions = "; ".join(f"{a.name}: {a.description}" for a in routable_agents) or "none"
     chain_ids = ", ".join(c.name for c in list_chains())
 
-    system = SYSTEM_PROMPT.format(agent_types=agent_types, workflow_ids=workflow_ids, chain_ids=chain_ids)
+    system = SYSTEM_PROMPT.format(agent_descriptions=agent_descriptions, chain_ids=chain_ids)
     messages = [ChatMessage(role="user", content=signal.content)]
 
     try:
         response = await adapter.complete(
             system_prompt=system,
             messages=messages,
-            tools=ROUTING_TOOLS,
+            tools=routing_tools,
         )
     except Exception as e:
         logger.exception(f"LLM routing failed: {e}")
@@ -312,22 +312,6 @@ async def _process_inner(signal: OrchestratorInput, span) -> dict:
         return {
             "status": "needs_info",
             "message": args.get("question", "Could you provide more details?"),
-            "reasoning": args.get("reasoning", ""),
-        }
-
-    # --- route_to_automation ---
-    if tool_name == "route_to_automation":
-        workflow_id = args.get("workflow_id", "")
-        result = await execute_workflow(
-            workflow_id,
-            trigger_context=signal.content,
-            input_id=signal.id,
-        )
-        return {
-            "status": result.status.value,
-            "message": result.result,
-            "execution_id": result.id,
-            "type": "automation",
             "reasoning": args.get("reasoning", ""),
         }
 
