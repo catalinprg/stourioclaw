@@ -129,6 +129,8 @@
                 { key: 'telegram', label: 'Telegram' },
                 { key: 'rules', label: 'Rules' },
                 { key: 'audit', label: 'Audit' },
+                { key: 'cron', label: 'Cron Jobs' },
+                { key: 'mcp', label: 'MCP Servers' },
                 { key: 'cost', label: 'Costs' },
                 { key: 'deployment', label: 'Deployment' },
             ];
@@ -182,6 +184,8 @@
                     {view === 'telegram' && <TelegramViewer key={refreshKey} api={api} />}
                     {view === 'rules' && <RulesView key={refreshKey} api={api} />}
                     {view === 'audit' && <AuditView key={refreshKey} api={api} />}
+                    {view === 'cron' && <CronJobsView key={refreshKey} api={api} />}
+                    {view === 'mcp' && <McpServersView key={refreshKey} api={api} />}
                     {view === 'cost' && <CostView key={refreshKey} api={api} />}
                     {view === 'deployment' && <DeploymentManager key={refreshKey} api={api} status={status} />}
                 </div>
@@ -835,6 +839,172 @@
                                 </table>
                             )
                         }
+                    </div>
+                </div>
+            );
+        }
+
+        // --- Cron Jobs View ---
+        function CronJobsView({ api }) {
+            const [jobs, setJobs] = useState([]);
+            const [agents, setAgents] = useState([]);
+            const [form, setForm] = useState({ name: '', schedule: '', agent_type: '', objective: '' });
+
+            const fetchJobs = () => api('/api/cron').then(setJobs).catch(console.error);
+            const fetchAgents = () => api('/api/agents').then(data => setAgents(Array.isArray(data) ? data : [])).catch(console.error);
+            useEffect(() => { fetchJobs(); fetchAgents(); }, []);
+
+            const createJob = async (e) => {
+                e.preventDefault();
+                try {
+                    await api('/api/cron', 'POST', form);
+                    setForm({ name: '', schedule: '', agent_type: '', objective: '' });
+                    fetchJobs();
+                } catch (err) { alert(err.message); }
+            };
+
+            const deleteJob = async (name) => {
+                await api(`/api/cron/${name}`, 'DELETE');
+                fetchJobs();
+            };
+
+            const toggleJob = async (name, active) => {
+                await api(`/api/cron/${name}/toggle?active=${active}`, 'POST');
+                fetchJobs();
+            };
+
+            return (
+                <div className="grid grid-cols-3 gap-6">
+                    <div className="col-span-2 card">
+                        <h3 className="text-xl mb-4">Scheduled Jobs</h3>
+                        <table className="text-sm">
+                            <thead><tr><th>Name</th><th>Schedule</th><th>Agent</th><th>Objective</th><th>Active</th><th>Last Run</th><th>Next Run</th><th></th></tr></thead>
+                            <tbody>
+                                {jobs.map(j => (
+                                    <tr key={j.id}>
+                                        <td className="font-medium">{j.name}</td>
+                                        <td className="font-mono text-xs">{j.schedule}</td>
+                                        <td className="text-xs">{j.agent_type}</td>
+                                        <td className="text-xs max-w-[200px] truncate" title={j.objective}>{j.objective}</td>
+                                        <td>
+                                            <label className="toggle">
+                                                <input type="checkbox" checked={j.active} onChange={() => toggleJob(j.name, !j.active)} />
+                                                <span className="toggle-slider"></span>
+                                            </label>
+                                        </td>
+                                        <td className="text-xs text-stourio-secondary">{j.last_run_at ? new Date(j.last_run_at).toLocaleString() : '—'}</td>
+                                        <td className="text-xs text-stourio-secondary">{j.next_run_at ? new Date(j.next_run_at).toLocaleString() : '—'}</td>
+                                        <td><button onClick={() => deleteJob(j.name)} className="text-stourio-red text-xs underline">Del</button></td>
+                                    </tr>
+                                ))}
+                                {jobs.length === 0 && <tr><td colSpan="8" className="text-stourio-secondary text-center">No cron jobs configured.</td></tr>}
+                            </tbody>
+                        </table>
+                    </div>
+                    <div className="card h-fit">
+                        <h3 className="text-xl mb-4">Add Cron Job</h3>
+                        <form onSubmit={createJob}>
+                            <input className="input-field text-sm" placeholder="Job name (e.g., daily-report)" value={form.name} onChange={e => setForm({...form, name: e.target.value})} required />
+                            <input className="input-field text-sm font-mono" placeholder="Cron schedule (e.g., 0 9 * * *)" value={form.schedule} onChange={e => setForm({...form, schedule: e.target.value})} required />
+                            <select className="input-field text-sm" value={form.agent_type} onChange={e => setForm({...form, agent_type: e.target.value})} required>
+                                <option value="">Select Agent</option>
+                                {agents.map(a => <option key={a.name} value={a.name}>{a.display_name || a.name}</option>)}
+                            </select>
+                            <textarea className="input-field text-sm" placeholder="Objective — what should the agent do?" value={form.objective} onChange={e => setForm({...form, objective: e.target.value})} required />
+                            <button type="submit" className="btn btn-primary w-full mt-2">Create Cron Job</button>
+                        </form>
+                        <p className="text-xs text-stourio-secondary mt-3">
+                            Schedule format: min hour day month weekday<br/>
+                            Examples: <code>*/5 * * * *</code> (every 5 min), <code>0 9 * * *</code> (daily 9am)
+                        </p>
+                    </div>
+                </div>
+            );
+        }
+
+        // --- MCP Servers View ---
+        function McpServersView({ api }) {
+            const [servers, setServers] = useState([]);
+            const [form, setForm] = useState({ name: '', endpoint_url: '', endpoint_command: '', transport: 'sse', auth_env_var: '' });
+
+            const fetchServers = () => api('/api/mcp-servers').then(setServers).catch(console.error);
+            useEffect(() => { fetchServers(); }, []);
+
+            const createServer = async (e) => {
+                e.preventDefault();
+                const payload = { ...form };
+                if (payload.transport === 'sse') { delete payload.endpoint_command; }
+                else { delete payload.endpoint_url; }
+                if (!payload.auth_env_var) delete payload.auth_env_var;
+                try {
+                    await api('/api/mcp-servers', 'POST', payload);
+                    setForm({ name: '', endpoint_url: '', endpoint_command: '', transport: 'sse', auth_env_var: '' });
+                    fetchServers();
+                } catch (err) { alert(err.message); }
+            };
+
+            const deleteServer = async (name) => {
+                await api(`/api/mcp-servers/${name}`, 'DELETE');
+                fetchServers();
+            };
+
+            const refreshServer = async (name) => {
+                try {
+                    const result = await api(`/api/mcp-servers/${name}/refresh`, 'POST');
+                    alert(`Refreshed: ${result.tools?.length || 0} tools discovered`);
+                    fetchServers();
+                } catch (err) { alert(err.message); }
+            };
+
+            return (
+                <div className="grid grid-cols-3 gap-6">
+                    <div className="col-span-2 card">
+                        <h3 className="text-xl mb-4">Connected MCP Servers</h3>
+                        <table className="text-sm">
+                            <thead><tr><th>Name</th><th>Transport</th><th>Endpoint</th><th>Auth</th><th>Connected</th><th>Tools</th><th></th></tr></thead>
+                            <tbody>
+                                {servers.map(s => (
+                                    <tr key={s.id}>
+                                        <td className="font-medium">{s.name}</td>
+                                        <td className="text-xs uppercase">{s.transport}</td>
+                                        <td className="font-mono text-xs max-w-[200px] truncate" title={s.endpoint_url || s.endpoint_command}>{s.endpoint_url || s.endpoint_command}</td>
+                                        <td className="text-xs font-mono">{s.auth_env_var || '—'}</td>
+                                        <td>
+                                            <span className={`badge ${s.connected ? 'badge-low' : 'badge-high'}`}>
+                                                {s.connected ? 'yes' : 'no'}
+                                            </span>
+                                        </td>
+                                        <td className="text-xs">{s.tools?.length || 0} tools</td>
+                                        <td className="flex gap-2">
+                                            <button onClick={() => refreshServer(s.name)} className="text-stourio-secondary text-xs underline">Refresh</button>
+                                            <button onClick={() => deleteServer(s.name)} className="text-stourio-red text-xs underline">Del</button>
+                                        </td>
+                                    </tr>
+                                ))}
+                                {servers.length === 0 && <tr><td colSpan="7" className="text-stourio-secondary text-center">No MCP servers connected.</td></tr>}
+                            </tbody>
+                        </table>
+                    </div>
+                    <div className="card h-fit">
+                        <h3 className="text-xl mb-4">Connect MCP Server</h3>
+                        <form onSubmit={createServer}>
+                            <input className="input-field text-sm" placeholder="Server name (e.g., notion)" value={form.name} onChange={e => setForm({...form, name: e.target.value})} required />
+                            <select className="input-field text-sm" value={form.transport} onChange={e => setForm({...form, transport: e.target.value})}>
+                                <option value="sse">SSE (HTTP)</option>
+                                <option value="stdio">Stdio (subprocess)</option>
+                            </select>
+                            {form.transport === 'sse' ? (
+                                <input className="input-field text-sm font-mono" placeholder="Endpoint URL (e.g., http://localhost:3456/sse)" value={form.endpoint_url} onChange={e => setForm({...form, endpoint_url: e.target.value})} required />
+                            ) : (
+                                <input className="input-field text-sm font-mono" placeholder="Command (e.g., npx @notion/mcp-server)" value={form.endpoint_command} onChange={e => setForm({...form, endpoint_command: e.target.value})} required />
+                            )}
+                            <input className="input-field text-sm font-mono" placeholder="Auth env var name (e.g., NOTION_MCP_TOKEN)" value={form.auth_env_var} onChange={e => setForm({...form, auth_env_var: e.target.value})} />
+                            <button type="submit" className="btn btn-primary w-full mt-2">Connect Server</button>
+                        </form>
+                        <p className="text-xs text-stourio-secondary mt-3">
+                            Set the auth token in your <code>.env</code> file before connecting.<br/>
+                            After connecting, assign the server to agents via the Agents tab.
+                        </p>
                     </div>
                 </div>
             );
