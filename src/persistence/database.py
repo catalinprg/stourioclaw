@@ -3,6 +3,7 @@ import logging
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy import Column, String, Text, DateTime, Boolean, JSON, func, text, Integer, Numeric
+from sqlalchemy.dialects.postgresql import TSVECTOR
 from pgvector.sqlalchemy import Vector
 from src.config import settings
 
@@ -84,6 +85,7 @@ class DocumentChunk(Base):
     content = Column(Text, nullable=False)
     metadata_ = Column("metadata", JSON, default={})
     embedding = Column(Vector(settings.embedding_dimension))
+    tsv = Column(TSVECTOR)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now())
 
