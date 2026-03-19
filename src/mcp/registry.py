@@ -124,29 +124,22 @@ class ToolRegistry:
             name, agent_name, result.severity, approval.id, result.reason,
         )
 
-        # Send Telegram notification with inline approve/reject buttons
+        # Send Telegram notification (approval via admin panel, not Telegram)
         if self._telegram_client is not None:
             try:
                 chat_ids = settings.telegram_allowed_user_ids
-                reply_markup = {
-                    "inline_keyboard": [
-                        [
-                            {"text": "Approve", "callback_data": f"approve:{approval.id}"},
-                            {"text": "Reject", "callback_data": f"reject:{approval.id}"},
-                        ]
-                    ]
-                }
                 msg = (
-                    f"*Approval Required*\n\n"
+                    f"⚠️ *Approval Required*\n\n"
                     f"Tool: `{name}`\n"
                     f"Agent: `{agent_name}`\n"
                     f"Risk: *{result.severity}*\n"
                     f"Reason: {result.reason}\n\n"
-                    f"ID: `{approval.id}`"
+                    f"ID: `{approval.id}`\n\n"
+                    f"Approve or reject via admin panel."
                 )
                 for cid in chat_ids:
                     await self._telegram_client.send_message(
-                        chat_id=cid, text=msg, reply_markup=reply_markup
+                        chat_id=cid, text=msg
                     )
             except Exception as exc:
                 logger.error("Failed to send Telegram approval notification: %s", exc)

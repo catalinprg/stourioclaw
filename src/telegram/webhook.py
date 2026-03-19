@@ -177,37 +177,14 @@ async def _extract_message_content(message: dict) -> Optional[str]:
 
 
 async def _handle_callback_query(callback_query: dict, chat_id: int) -> Optional[str]:
-    """Handle inline keyboard callbacks (approve/reject)."""
-    callback_data = callback_query.get("data", "")
+    """Handle inline keyboard callbacks — approvals now happen via admin panel."""
     callback_query_id = callback_query.get("id")
-
-    if not callback_data or not _orchestrator:
-        return None
-
-    parts = callback_data.split(":", 1)
-    if len(parts) != 2:
-        return None
-
-    action, approval_id = parts
-
-    if action not in ("approve", "reject"):
-        return None
-
-    # Answer the callback to remove the loading state
     if _telegram_client and callback_query_id:
         try:
             await _telegram_client.answer_callback_query(
                 callback_query_id=callback_query_id,
-                text=f"{'Approved' if action == 'approve' else 'Rejected'}",
+                text="Approvals are managed via the admin panel.",
             )
         except Exception:
-            logger.debug("Failed to answer callback query")
-
-    # Process the approval decision
-    approved = action == "approve"
-    response_text = f"Decision recorded: {'approved' if approved else 'rejected'} for {approval_id}"
-
-    if _telegram_client:
-        await _telegram_client.send_message(chat_id=chat_id, text=response_text)
-
-    return response_text
+            pass
+    return None

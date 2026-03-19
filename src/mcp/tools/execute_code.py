@@ -4,9 +4,17 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import tempfile
 
 logger = logging.getLogger("stourio.tools.execute_code")
+
+# Minimal environment for subprocess — no secrets leaked
+_SAFE_ENV = {
+    "PATH": "/usr/local/bin:/usr/bin:/bin",
+    "HOME": "/tmp",
+    "LANG": "en_US.UTF-8",
+}
 
 
 async def execute_code(arguments: dict) -> dict:
@@ -18,6 +26,7 @@ async def execute_code(arguments: dict) -> dict:
     if language not in ("python", "bash"):
         return {"error": f"Unsupported language: {language}", "exit_code": -1}
 
+    tmp_path = None
     try:
         if language == "python":
             with tempfile.NamedTemporaryFile(
@@ -29,12 +38,14 @@ async def execute_code(arguments: dict) -> dict:
                 "python3", tmp_path,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
+                env=_SAFE_ENV,
             )
         else:
             proc = await asyncio.create_subprocess_exec(
                 "bash", "-c", code,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
+                env=_SAFE_ENV,
             )
 
         stdout, stderr = await asyncio.wait_for(
@@ -59,3 +70,6 @@ async def execute_code(arguments: dict) -> dict:
     except Exception as exc:
         logger.exception("execute_code failed")
         return {"error": str(exc), "exit_code": -1}
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            os.unlink(tmp_path)

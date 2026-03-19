@@ -230,6 +230,14 @@ async def lifespan(app: FastAPI):
     from src.mcp.tools import register_all_tools
     register_all_tools()
 
+    # 3b. Wire security interceptor
+    from src.mcp.registry import tool_registry
+    if settings.security_inline_enabled:
+        from src.security.interceptor import SecurityInterceptor
+        interceptor = SecurityInterceptor(enabled=True)
+        tool_registry.set_interceptor(interceptor)
+        logger.info("Security interceptor wired (inline enabled)")
+
     # 4. Agent seed from YAML
     from src.agents.registry import AgentRegistry
     async with async_session() as session:
@@ -267,6 +275,7 @@ async def lifespan(app: FastAPI):
         telegram_client = TelegramClient(token=settings.telegram_bot_token)
         init_telegram_handler(orchestrator_module, telegram_client)
         set_telegram_client(telegram_client, settings.telegram_allowed_user_ids)
+        tool_registry._telegram_client = telegram_client
         if not settings.telegram_use_polling:
             await telegram_client.set_webhook(
                 settings.telegram_webhook_url, settings.telegram_webhook_secret
