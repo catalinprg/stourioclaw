@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:3000,http://localhost:8000"
     security_audit_interval_seconds: int = 60
     security_inline_enabled: bool = True
+    scheduler_tick_seconds: int = 30
 
     # --- Infrastructure passwords (docker-compose) ---
     postgres_password: str = "changeme"
@@ -91,6 +92,11 @@ class Settings(BaseSettings):
     agent_templates_dir: str = "config/agents"
     agent_concurrency_default: int = 3
     agent_concurrency_config: dict = {}
+
+    # Browser automation
+    browser_headless: bool = True
+    browser_timeout_ms: int = 30000
+    browser_allowed_domains: list[str] = []
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 

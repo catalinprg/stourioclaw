@@ -47,6 +47,7 @@ services:
 
   stourioclaw:
     build: .
+    shm_size: 2gb
     ports:
       - "8000:8000"
     env_file:

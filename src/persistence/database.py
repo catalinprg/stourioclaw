@@ -140,6 +140,22 @@ class SecurityAlertModel(Base):
     resolved_at = Column(DateTime, nullable=True)
 
 
+class CronJobRecord(Base):
+    __tablename__ = "cron_jobs"
+
+    id = Column(String, primary_key=True)
+    name = Column(String(100), unique=True, nullable=False)
+    schedule = Column(String(100), nullable=False)
+    agent_type = Column(String(100), nullable=False)
+    objective = Column(Text, nullable=False)
+    conversation_id = Column(String, nullable=True)
+    active = Column(Boolean, default=True)
+    last_run_at = Column(DateTime, nullable=True)
+    next_run_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
 # --- Init ---
 
 async def init_db():
