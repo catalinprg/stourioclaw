@@ -106,9 +106,10 @@ async def default_tool_executor(tool_name: str, arguments: dict, agent_name: str
         # Tool not in local registry — check MCP client pool
         if "__" in tool_name:
             server_name, remote_tool_name = tool_name.split("__", 1)
+            server_name_lower = server_name.lower()
             from src.mcp.client import get_mcp_client_pool
             pool = get_mcp_client_pool()
-            if pool.is_connected(server_name):
+            if pool.is_connected(server_name_lower) or pool.is_connected(server_name):
                 # Use registry's wired interceptor for security (errata E5)
                 interceptor = registry._interceptor
                 if interceptor is not None:
@@ -121,7 +122,8 @@ async def default_tool_executor(tool_name: str, arguments: dict, agent_name: str
 
                 # Strip internal _agent_name before sending to external MCP server
                 mcp_args = {k: v for k, v in arguments.items() if k != "_agent_name"}
-                result = await pool.execute_tool(server_name, remote_tool_name, mcp_args)
+                actual_server = server_name_lower if pool.is_connected(server_name_lower) else server_name
+                result = await pool.execute_tool(actual_server, remote_tool_name, mcp_args)
                 return json.dumps(result)
         return json.dumps({"error": f"Tool '{tool_name}' not found in local registry or MCP servers"})
     except Exception as e:
