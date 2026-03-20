@@ -385,6 +385,7 @@ async def lifespan(app: FastAPI):
                 "endpoint_url": server.endpoint_url,
                 "endpoint_command": server.endpoint_command,
                 "auth_env_var": server.auth_env_var,
+                "auth_token_encrypted": server.auth_token_encrypted,
             })
 
     logger.info("Ready.")

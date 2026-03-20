@@ -171,6 +171,7 @@ class McpServerRecord(Base):
     endpoint_command = Column(String(500), nullable=True)
     transport = Column(String(20), nullable=False)
     auth_env_var = Column(String(100), nullable=True)
+    auth_token_encrypted = Column(Text, nullable=True)
     high_risk_tools = Column(JSON, default=list)
     active = Column(Boolean, default=True)
     created_at = Column(DateTime, server_default=func.now())

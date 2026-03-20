@@ -110,6 +110,7 @@ class Settings(BaseSettings):
     # MCP client
     mcp_client_timeout: int = 30
     mcp_stdio_allowed_commands: list[str] = []
+    mcp_encryption_key: str = ""  # Fernet key for encrypting MCP auth tokens
 
     # Text-to-Speech (ElevenLabs)
     elevenlabs_api_key: str = ""

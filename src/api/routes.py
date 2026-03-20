@@ -495,6 +495,7 @@ class McpServerCreateRequest(BaseModel):
     endpoint_command: Optional[str] = None
     transport: str = Field(..., pattern="^(sse|stdio)$")
     auth_env_var: Optional[str] = None
+    auth_token: Optional[str] = None  # Plaintext token — encrypted before storage
 
     @model_validator(mode="after")
     def validate_endpoint(self):
@@ -534,7 +535,12 @@ async def create_mcp_server(req: McpServerCreateRequest, session: AsyncSession =
     if existing.scalars().first():
         raise HTTPException(status_code=409, detail=f"MCP server '{req.name}' already exists.")
 
-    if req.auth_env_var:
+    # Handle auth - either env var or direct token
+    auth_token_encrypted = None
+    if req.auth_token:
+        from src.mcp.crypto import encrypt_token
+        auth_token_encrypted = encrypt_token(req.auth_token)
+    elif req.auth_env_var:
         import os
         if not os.environ.get(req.auth_env_var):
             raise HTTPException(status_code=400, detail=f"Environment variable '{req.auth_env_var}' is not set.")
@@ -545,7 +551,8 @@ async def create_mcp_server(req: McpServerCreateRequest, session: AsyncSession =
         endpoint_url=req.endpoint_url,
         endpoint_command=req.endpoint_command,
         transport=req.transport,
-        auth_env_var=req.auth_env_var,
+        auth_env_var=req.auth_env_var if not req.auth_token else None,
+        auth_token_encrypted=auth_token_encrypted,
     )
     session.add(record)
     await session.commit()
@@ -555,7 +562,8 @@ async def create_mcp_server(req: McpServerCreateRequest, session: AsyncSession =
         "transport": req.transport,
         "endpoint_url": req.endpoint_url,
         "endpoint_command": req.endpoint_command,
-        "auth_env_var": req.auth_env_var,
+        "auth_env_var": req.auth_env_var if not req.auth_token else None,
+        "auth_token_encrypted": auth_token_encrypted,
     })
 
     await audit.log("MCP_SERVER_CREATED", f"MCP server '{req.name}' registered (connected={connected})")
@@ -592,6 +600,7 @@ async def refresh_mcp_server(name: str, session: AsyncSession = Depends(get_sess
         "endpoint_url": record.endpoint_url,
         "endpoint_command": record.endpoint_command,
         "auth_env_var": record.auth_env_var,
+        "auth_token_encrypted": record.auth_token_encrypted,
     })
 
     tools = [t.name for t in pool.get_tools(name)]

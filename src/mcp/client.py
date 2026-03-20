@@ -27,11 +27,22 @@ class McpClientPool:
         self._tools: dict[str, list[ToolDefinition]] = {}  # server_name -> tool defs
         self._server_configs: dict[str, dict] = {}  # server_name -> config
 
-    def _resolve_auth(self, env_var: str | None) -> str | None:
-        """Resolve auth token from environment variable at call time."""
-        if not env_var:
-            return None
-        return os.environ.get(env_var)
+    def _resolve_auth(self, config: dict) -> str | None:
+        """Resolve auth token from env var or encrypted DB storage."""
+        # Try env var first
+        env_var = config.get("auth_env_var")
+        if env_var:
+            token = os.environ.get(env_var)
+            if token:
+                return token
+
+        # Try encrypted token from DB
+        encrypted = config.get("auth_token_encrypted")
+        if encrypted:
+            from src.mcp.crypto import decrypt_token
+            return decrypt_token(encrypted)
+
+        return None
 
     def is_connected(self, server_name: str) -> bool:
         return server_name in self._connections

@@ -990,7 +990,7 @@
         // --- MCP Servers View ---
         function McpServersView({ api }) {
             const [servers, setServers] = useState([]);
-            const [form, setForm] = useState({ name: '', endpoint_url: '', endpoint_command: '', transport: 'sse', auth_env_var: '' });
+            const [form, setForm] = useState({ name: '', endpoint_url: '', endpoint_command: '', transport: 'sse', auth_env_var: '', auth_token: '' });
 
             const fetchServers = () => api('/api/mcp-servers').then(setServers).catch(console.error);
             useEffect(() => { fetchServers(); }, []);
@@ -1001,9 +1001,10 @@
                 if (payload.transport === 'sse') { delete payload.endpoint_command; }
                 else { delete payload.endpoint_url; }
                 if (!payload.auth_env_var) delete payload.auth_env_var;
+                if (!payload.auth_token) delete payload.auth_token;
                 try {
                     await api('/api/mcp-servers', 'POST', payload);
-                    setForm({ name: '', endpoint_url: '', endpoint_command: '', transport: 'sse', auth_env_var: '' });
+                    setForm({ name: '', endpoint_url: '', endpoint_command: '', transport: 'sse', auth_env_var: '', auth_token: '' });
                     fetchServers();
                 } catch (err) { alert(err.message); }
             };
@@ -1064,11 +1065,11 @@
                                 <input className="input-field text-sm mono" placeholder="Command (e.g., npx @notion/mcp-server)" value={form.endpoint_command} onChange={e => setForm({...form, endpoint_command: e.target.value})} required />
                             )}
                             <input className="input-field text-sm mono" placeholder="Auth env var name (e.g., NOTION_MCP_TOKEN)" value={form.auth_env_var} onChange={e => setForm({...form, auth_env_var: e.target.value})} />
+                            <input type="password" className="input-field text-sm font-mono" placeholder="Auth token (stored encrypted)" value={form.auth_token} onChange={e => setForm({...form, auth_token: e.target.value})} />
                             <button type="submit" className="btn btn-primary w-full mt-2">Connect Server</button>
                         </form>
-                        <p className="text-xs text-txt-muted mt-3">
-                            Set the auth token in your <code className="text-accent">.env</code> file before connecting.<br/>
-                            After connecting, assign the server to agents via the Agents tab.
+                        <p className="text-xs text-stourio-secondary mt-3">
+                            Enter auth token directly (encrypted in DB) or specify an env var name from .env.
                         </p>
                     </div>
                 </div>
