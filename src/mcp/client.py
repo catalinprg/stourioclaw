@@ -119,12 +119,6 @@ class McpClientPool:
                     logger.error("MCP server '%s' missing endpoint_command", server_name)
                     return False
 
-                from src.config import settings
-                allowed = getattr(settings, 'mcp_stdio_allowed_commands', [])
-                if endpoint_cmd not in allowed:
-                    logger.error("MCP stdio command '%s' not in allowlist", endpoint_cmd)
-                    return False
-
                 logger.info("Connecting to MCP server '%s' via stdio: %s", server_name, endpoint_cmd)
 
                 from mcp.client.stdio import stdio_client, StdioServerParameters
