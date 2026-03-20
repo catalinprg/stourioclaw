@@ -22,12 +22,12 @@ async def test_mcp_client_pool_get_tools_unknown_server():
 
 
 @pytest.mark.asyncio
-async def test_mcp_client_pool_resolve_auth():
+async def test_mcp_client_pool_resolve_auth_env_var():
     from src.mcp.client import McpClientPool
     pool = McpClientPool()
     os.environ["TEST_MCP_TOKEN"] = "secret123"
     try:
-        result = pool._resolve_auth("TEST_MCP_TOKEN")
+        result = pool._resolve_auth({"auth_env_var": "TEST_MCP_TOKEN"})
         assert result == "secret123"
     finally:
         del os.environ["TEST_MCP_TOKEN"]
@@ -37,7 +37,7 @@ async def test_mcp_client_pool_resolve_auth():
 async def test_mcp_client_pool_resolve_auth_missing():
     from src.mcp.client import McpClientPool
     pool = McpClientPool()
-    result = pool._resolve_auth("NONEXISTENT_VAR")
+    result = pool._resolve_auth({"auth_env_var": "NONEXISTENT_VAR"})
     assert result is None
 
 
