@@ -326,16 +326,20 @@
             const [agents, setAgents] = useState([]);
             const [showForm, setShowForm] = useState(false);
             const [editAgent, setEditAgent] = useState(null);
-            const [form, setForm] = useState({ name: '', display_name: '', description: '', system_prompt: '', model: '', tools: [], max_steps: 15, max_concurrent: 3 });
+            const [form, setForm] = useState({ name: '', display_name: '', description: '', system_prompt: '', model: '', tools: [], max_steps: 15, max_concurrent: 3, execution_mode: 'oneshot', mcp_servers: [], allowed_peers: [] });
             const [toolInput, setToolInput] = useState('');
+            const [mcpInput, setMcpInput] = useState('');
+            const [peerInput, setPeerInput] = useState('');
+            const [mcpServers, setMcpServers] = useState([]);
             const [confirmDelete, setConfirmDelete] = useState(null);
 
             const fetchAgents = () => api('/api/agents').then(data => setAgents(Array.isArray(data) ? data : (data.agents || []))).catch(console.error);
-            useEffect(() => { fetchAgents(); }, []);
+            const fetchMcpServers = () => api('/api/mcp-servers').then(data => setMcpServers(Array.isArray(data) ? data : [])).catch(console.error);
+            useEffect(() => { fetchAgents(); fetchMcpServers(); }, []);
 
             const resetForm = () => {
-                setForm({ name: '', display_name: '', description: '', system_prompt: '', model: '', tools: [], max_steps: 15, max_concurrent: 3 });
-                setToolInput('');
+                setForm({ name: '', display_name: '', description: '', system_prompt: '', model: '', tools: [], max_steps: 15, max_concurrent: 3, execution_mode: 'oneshot', mcp_servers: [], allowed_peers: [] });
+                setToolInput(''); setMcpInput(''); setPeerInput('');
                 setShowForm(false);
                 setEditAgent(null);
             };
@@ -362,6 +366,9 @@
                     tools: agent.tools || [],
                     max_steps: agent.max_steps || 15,
                     max_concurrent: agent.max_concurrent || 3,
+                    execution_mode: agent.execution_mode || 'oneshot',
+                    mcp_servers: agent.mcp_servers || [],
+                    allowed_peers: agent.allowed_peers || [],
                 });
                 setEditAgent(agent.name);
                 setShowForm(true);
@@ -377,6 +384,9 @@
                     tools: agent.tools || [],
                     max_steps: agent.max_steps || 15,
                     max_concurrent: agent.max_concurrent || 3,
+                    execution_mode: agent.execution_mode || 'oneshot',
+                    mcp_servers: agent.mcp_servers || [],
+                    allowed_peers: agent.allowed_peers || [],
                 });
                 setEditAgent(null);
                 setShowForm(true);
@@ -396,6 +406,22 @@
             };
 
             const removeTool = (t) => setForm({ ...form, tools: form.tools.filter(x => x !== t) });
+
+            const addMcp = () => {
+                if (mcpInput.trim() && !form.mcp_servers.includes(mcpInput.trim())) {
+                    setForm({ ...form, mcp_servers: [...form.mcp_servers, mcpInput.trim()] });
+                    setMcpInput('');
+                }
+            };
+            const removeMcp = (m) => setForm({ ...form, mcp_servers: form.mcp_servers.filter(x => x !== m) });
+
+            const addPeer = () => {
+                if (peerInput.trim() && !form.allowed_peers.includes(peerInput.trim())) {
+                    setForm({ ...form, allowed_peers: [...form.allowed_peers, peerInput.trim()] });
+                    setPeerInput('');
+                }
+            };
+            const removePeer = (p) => setForm({ ...form, allowed_peers: form.allowed_peers.filter(x => x !== p) });
 
             return (
                 <div>
@@ -453,6 +479,48 @@
                                         {form.tools.map(t => (
                                             <span key={t} className="bg-bg-700 px-2 py-1 rounded text-xs flex items-center gap-1 text-txt-secondary border border-border">
                                                 {t} <button type="button" onClick={() => removeTool(t)} className="text-st-red font-bold">&times;</button>
+                                            </span>
+                                        ))}
+                                    </div>
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="text-xs text-txt-muted mono mb-1 block">Execution Mode</label>
+                                        <select className="input-field text-sm" value={form.execution_mode} onChange={e => setForm({...form, execution_mode: e.target.value})}>
+                                            <option value="oneshot">Oneshot</option>
+                                            <option value="daemon">Daemon</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="text-xs text-txt-muted mono mb-1 block">MCP Servers</label>
+                                        <div className="flex gap-2 mb-2">
+                                            <select className="input-field text-sm mb-0 flex-1" value={mcpInput} onChange={e => setMcpInput(e.target.value)}>
+                                                <option value="">Select MCP server</option>
+                                                {mcpServers.filter(s => !form.mcp_servers.includes(s.name)).map(s => (
+                                                    <option key={s.name} value={s.name}>{s.name} ({s.tools?.length || 0} tools)</option>
+                                                ))}
+                                            </select>
+                                            <button type="button" onClick={addMcp} className="btn btn-outline btn-sm">Add</button>
+                                        </div>
+                                        <div className="flex flex-wrap gap-1 mb-2">
+                                            {form.mcp_servers.map(m => (
+                                                <span key={m} className="bg-bg-700 px-2 py-1 rounded text-xs flex items-center gap-1 text-txt-secondary border border-border">
+                                                    {m} <button type="button" onClick={() => removeMcp(m)} className="text-st-red font-bold">&times;</button>
+                                                </span>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="text-xs text-txt-muted mono mb-1 block">Allowed Peers (empty = accept from all)</label>
+                                    <div className="flex gap-2 mb-2">
+                                        <input className="input-field text-sm mb-0 flex-1" value={peerInput} onChange={e => setPeerInput(e.target.value)} placeholder="Agent name" onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addPeer(); }}} />
+                                        <button type="button" onClick={addPeer} className="btn btn-outline btn-sm">Add</button>
+                                    </div>
+                                    <div className="flex flex-wrap gap-1 mb-4">
+                                        {form.allowed_peers.map(p => (
+                                            <span key={p} className="bg-bg-700 px-2 py-1 rounded text-xs flex items-center gap-1 text-txt-secondary border border-border">
+                                                {p} <button type="button" onClick={() => removePeer(p)} className="text-st-red font-bold">&times;</button>
                                             </span>
                                         ))}
                                     </div>
