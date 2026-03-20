@@ -170,6 +170,17 @@ class ToolRegistry:
         logger.info(
             "Tool '%s' approved (approval=%s), executing", name, approval.id
         )
+
+        # MCP tools aren't in the local registry — route to MCP client
+        if "__" in name:
+            server_name, remote_tool_name = name.split("__", 1)
+            from src.mcp.client import get_mcp_client_pool
+            pool = get_mcp_client_pool()
+            actual_server = server_name.lower() if pool.is_connected(server_name.lower()) else server_name
+            # Strip internal keys before sending to external server
+            clean_args = {k: v for k, v in arguments.items() if not k.startswith("_")}
+            return await pool.execute_tool(actual_server, remote_tool_name, clean_args)
+
         return await self.get(name).execute_fn(arguments)
 
     # ------------------------------------------------------------------
