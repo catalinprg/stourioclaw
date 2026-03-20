@@ -129,17 +129,17 @@ class ToolRegistry:
             try:
                 chat_ids = settings.telegram_allowed_user_ids
                 msg = (
-                    f"⚠️ *Approval Required*\n\n"
-                    f"Tool: `{name}`\n"
-                    f"Agent: `{agent_name}`\n"
-                    f"Risk: *{result.severity}*\n"
+                    f"Approval Required\n\n"
+                    f"Tool: {name}\n"
+                    f"Agent: {agent_name}\n"
+                    f"Risk: {result.severity}\n"
                     f"Reason: {result.reason}\n\n"
-                    f"ID: `{approval.id}`\n\n"
+                    f"ID: {approval.id}\n\n"
                     f"Approve or reject via admin panel."
                 )
                 for cid in chat_ids:
                     await self._telegram_client.send_message(
-                        chat_id=cid, text=msg
+                        chat_id=cid, text=msg, parse_mode=""
                     )
             except Exception as exc:
                 logger.error("Failed to send Telegram approval notification: %s", exc)
